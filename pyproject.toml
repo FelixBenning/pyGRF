@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "pygrf"
+version = "0.1.0"
+description = "High dimensional Gaussian random functions"
+authors = ["Felix Benning <felix.benning@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.1.0"
+scipy = "^1.14.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+flake8 = "^7.1.1"
+pylint = "^3.2.7"
+pytest = "^8.3.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
