@@ -15,7 +15,7 @@ class LazyAdaptedSpan():
     def as_standard_basis(self, coeffs):
         """ Convert the coefficients to the standard basis """
         self.eager(len(coeffs))
-        return sum(coeff * basis for coeff, basis in zip(coeffs, self._basis)) 
+        return sum(coeff * basis for coeff, basis in zip(coeffs, self._basis))
 
 
     def __getitem__(self, idx):

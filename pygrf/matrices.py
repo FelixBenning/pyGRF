@@ -11,11 +11,12 @@ def _matmul_kitematrix(left, right):
 
     used to implement __matmul__ and __rmatmul__ of KiteMatrix
     """
+
+    if not left.shape[1] == right.shape[0]:
+        raise ValueError("Matrix dimensions do not match")
+
     dcols_l = left.dense.shape[1]  # dense columns of left
     drows_r = right.dense.shape[0]  # dense rows of right
-
-    if not (dcols_l + left.sparse_dim) == (drows_r + right.sparse_dim):
-        raise ValueError("Matrix dimensions do not match")
 
     if dcols_l == drows_r:
         return KiteMatrix(
@@ -61,6 +62,23 @@ class KiteMatrix:
         self.dense = dense
         self.sparse_val, self.sparse_dim = sparse
 
+    @property
+    def shape(self):
+        """Returns the shape of the matrix"""
+        return self.dense.shape[0] + self.sparse_dim, self.dense.shape[1] + self.sparse_dim
+
+    @property
+    def T(self): # pylint: disable=invalid-name
+        """ same as self.transpose() """
+        return self.transpose()
+
+    def transpose(self):
+        """Transpose of the matrix"""
+        return KiteMatrix(
+            dense=self.dense.T,
+            sparse=(self.sparse_val, self.sparse_dim),
+        )
+
     def tosparse(self):
         """Convert to sparse matrix"""
         return sp.block_array(
@@ -82,6 +100,13 @@ class KiteMatrix:
         n = self.dense.shape[1]
         return np.concatenate(
             (self.dense @ other[0:n, :], self.sparse_val * other[n:, :]), axis=0
+        )
+
+    def cholesky(self):
+        """Cholesky decomposition of the matrix, assuming it is square"""
+        return KiteMatrix(
+            dense=np.linalg.cholesky(self.dense),
+            sparse=(np.sqrt(self.sparse_val), self.sparse_dim),
         )
 
     def __rmatmul__(self, other):
