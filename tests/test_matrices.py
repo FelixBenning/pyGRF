@@ -70,18 +70,35 @@ def test_kitematrix_matmul_random(random_kitematrix_tuple):
     res2= (matl @ matr).toarray()
     assert np.allclose(res1, res2)
 
+
+def test_kitematrix_choleksy_handcrafted():
+    """Test cholesky decomposition with handcrafted examples"""
+    mat_sq = KiteMatrix(dense=np.array([[4, 12, -16], [12, 37, -43], [-16, -43, 98]]), diag=ScaledIdentity(0.3, 3))
+    mat_b = KiteMatrix(dense=np.array([[1], [2], [3]]), diag=ScaledIdentity(2, 3))
+    chol_expected = sp.linalg.cholesky(mat_sq.toarray(), lower=True)
+    solve_expected = sp.linalg.solve_triangular(chol_expected, mat_b.toarray(), lower=True)
+
+    chol_actual:KiteMatrix = mat_sq.cholesky()
+    assert np.allclose(chol_expected, chol_actual.toarray())
+
+    solve_actual = chol_actual.solve_triangular(mat_b)
+    assert np.allclose(solve_expected, solve_actual.toarray())
+
+    res3 = np.linalg.cholesky(np.tril(mat_sq.toarray()))
+    assert np.allclose(chol_expected,res3)
+
 @pytest.mark.parametrize("random_kitematrix_chol", range(100), indirect=True)
 def test_kitematrix_cholesky_random(random_kitematrix_chol):
     """Test cholesky decomposition with random input"""
     mat_sq, mat_b = random_kitematrix_chol
     lower = True
     chol_expected = sp.linalg.cholesky(mat_sq.toarray(), lower=lower)
-    solve_expected = sp.linalg.cho_solve((chol_expected, lower), mat_b.toarray())
+    solve_expected = sp.linalg.solve_triangular(chol_expected, mat_b.toarray(), lower=lower)
 
     chol_actual:KiteMatrix = mat_sq.cholesky()
     assert np.allclose(chol_expected, chol_actual.toarray())
 
-    solve_actual = chol_actual.cho_solve(mat_b)
+    solve_actual = chol_actual.solve_triangular(mat_b)
     assert np.allclose(solve_expected, solve_actual.toarray())
 
 

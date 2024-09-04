@@ -228,11 +228,9 @@ class KiteMatrix:
             lower=lower,
         )
 
-    def cho_solve(self, other, check_finite=True):
+    def solve_triangular(self, other, trans='N', check_finite=True):
         """Solve the linear system self @ x = b
 
-        calls scipy.linalg.cho_solve under the hood, which is a wrapper around
-        lapack's POTRS, https://oneapi-src.github.io/oneMKL/domains/lapack/potrs.html
         """
         if self.lower is None:
             raise ValueError("Matrix is not triangular")
@@ -243,9 +241,11 @@ class KiteMatrix:
 
             if dcols_l == drows_r:
                 return KiteMatrix(
-                    dense=sp.linalg.cho_solve(
-                        (self.dense, self.lower),
+                    dense=sp.linalg.solve_triangular(
+                        self.dense,
                         other.dense,
+                        lower=self.lower,
+                        trans=trans,
                         check_finite=check_finite,
                     ),
                     diag=self.diag.solve(other.diag),
@@ -255,9 +255,11 @@ class KiteMatrix:
                 # since this will be rarely used anyway, simply enlarge dense matrix on the right
                 middle, rest_diag = other.diag.split_blocks(dcols_l - drows_r)
                 return KiteMatrix(
-                    dense=sp.linalg.cho_solve(
-                        (self.dense, self.lower),
-                        KiteMatrix(dense=other.dense, diag=middle).tosparse(),
+                    dense=sp.linalg.solve_triangular(
+                        self.dense,
+                        KiteMatrix(dense=other.dense, diag=middle).toarray(),
+                        lower=self.lower,
+                        trans=trans,
                         check_finite=check_finite,
                     ),
                     diag=self.diag.solve(rest_diag),
@@ -267,9 +269,11 @@ class KiteMatrix:
                 return KiteMatrix(
                     dense=np.concatenate(
                         (
-                            sp.linalg.cho_solve(
-                                (self.dense, self.lower),
+                            sp.linalg.solve_triangular(
+                                self.dense,
                                 other.dense[0:dcols_l],
+                                lower=self.lower,
+                                trans=trans,
                                 check_finite=check_finite,
                             ),
                             middle.solve(other.dense[dcols_l:]),
@@ -280,9 +284,11 @@ class KiteMatrix:
                 )
 
         return np.concatenate(
-            sp.linalg.cho_solve(
-                (self.dense, self.lower),
+            sp.linalg.solve_triangular(
+                self.dense,
                 other[0 : self.dense.shape[1]],
+                lower=self.lower,
+                trans=trans,
                 check_finite=check_finite,
             ),
             self.diag.solve(other[self.dense.shape[1] :], check_finite=check_finite),
