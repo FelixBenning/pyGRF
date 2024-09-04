@@ -4,14 +4,14 @@
 import pytest
 import numpy as np
 
-from pygrf.matrices import KiteMatrix
+from pygrf.matrices import KiteMatrix, ScaledIdentity
 
 def _random_kitematrix(rows, cols, rng=np.random.default_rng()):
     """Return a random KiteMatrix of shape rows x cols"""
-    diag = rng.integers(low=0, high=min(cols, rows))
+    diag_dim = rng.integers(low=0, high=min(cols, rows))
     return KiteMatrix(
-        dense=rng.random((cols-diag, rows-diag)),
-        sparse=(rng.random(), diag),
+        dense=rng.random((rows-diag_dim, cols-diag_dim)),
+        diag=ScaledIdentity(rng.random(), diag_dim),
     )
 
 @pytest.fixture
@@ -50,12 +50,12 @@ def test_random_matrix_fixture(random_kitematrix_tuple):
 
 def test_kitematrix_matmul_handcrafted():
     """Test matrix multiplication with handcrafted examples"""
-    mat1 = KiteMatrix(dense=np.array([[1, 2], [3, 4]]), sparse=(1,2))
-    mat2 = KiteMatrix(dense=np.array([[-1, 5], [6, 7]]), sparse=(3,2))
+    mat1 = KiteMatrix(dense=np.array([[1, 2], [3, 4]]), diag=ScaledIdentity(1,2))
+    mat2 = KiteMatrix(dense=np.array([[-1, 5], [6, 7]]), diag=ScaledIdentity(3,2))
     assert np.allclose(mat1.toarray() @ mat2.toarray(), (mat1 @ mat2).toarray())
 
-    mat1 = KiteMatrix(dense=np.array([[1, 2], [3, 4]]), sparse=(1, 3))
-    mat2 = KiteMatrix(dense=np.array([[-1, 5, 2], [6, 7, 2], [1,2,3]]), sparse=(3, 2))
+    mat1 = KiteMatrix(dense=np.array([[1, 2], [3, 4]]), diag=ScaledIdentity(1, 3))
+    mat2 = KiteMatrix(dense=np.array([[-1, 5, 2], [6, 7, 2], [1,2,3]]), diag=ScaledIdentity(3, 2))
     assert np.allclose(mat1.toarray() @ mat2.toarray(), (mat1 @ mat2).toarray())
 
 @pytest.mark.parametrize("random_kitematrix_tuple", range(100), indirect=True)
