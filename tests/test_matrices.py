@@ -74,5 +74,8 @@ def test_kitematrix_cholesky_random(random_kitematrix_square):
     res2 = mat.cholesky().toarray()
     assert np.allclose(res1, res2)
 
+    res3 = np.linalg.cholesky(np.tril(mat.toarray()))
+    assert np.allclose(res1,res3)
+
 
 

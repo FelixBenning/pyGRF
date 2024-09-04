@@ -1,7 +1,7 @@
 """ Implement special matrices """
 
 import numpy as np
-import scipy.sparse as sp
+import scipy as sp
 
 
 class ScaledIdentity:
@@ -29,7 +29,7 @@ class ScaledIdentity:
 
     def tosparse(self):
         """Convert to sparse matrix"""
-        return sp.diags(np.full(self.dim, self.scale))
+        return sp.sparse.diags(np.full(self.dim, self.scale))
 
     def toarray(self):
         """Convert to dense array"""
@@ -38,6 +38,9 @@ class ScaledIdentity:
     def cholesky(self):
         """Cholesky decomposition of itself"""
         return ScaledIdentity(np.sqrt(self.scale), self.dim)
+
+    def solve(self, other):
+        return other / self.scale, self.scale != 0
 
     def __matmul__(self, other):
         if self.shape[1] != other.shape[0]:
@@ -63,67 +66,18 @@ class ScaledIdentity:
         )
 
 
-def _matmul_kitematrix(left: "KiteMatrix", right: "KiteMatrix"):
-    """Matrix multiplication of two KiteMatrices
-
-    i.e. left @ right
-
-    used to implement __matmul__ and __rmatmul__ of KiteMatrix
-    """
-
-    if not left.shape[1] == right.shape[0]:
-        raise ValueError(f"Matmul of shapes {left.shape} and {right.shape} not possible")
-
-    dcols_l = left.dense.shape[1]  # dense columns of left
-    drows_r = right.dense.shape[0]  # dense rows of right
-
-    if dcols_l == drows_r:
-        return KiteMatrix(
-            dense=left.dense @ right.dense,
-            diag=left.diag @ right.diag,
-        )
-
-    # padd smaller dense matrix by using some of the sparse part
-    elif dcols_l > drows_r:
-        middle, lower = right.diag.split_blocks(dcols_l - drows_r)
-        return KiteMatrix(
-            dense=np.concatenate(
-                (
-                    left.dense[:, 0:drows_r] @ right.dense,  # fully dense
-                    # unfortunately, dense matrices do not seem to raise NotImplemented
-                    # such that __rmatmul__ is called %TODO: better solution
-                    # pylint: disable=unnecessary-dunder-call
-                    middle.__rmatmul__(left.dense[:, drows_r:]),  # dense * sparse
-                ),
-                axis=1,
-            ),
-            diag=left.diag @ lower,
-        )
-    else:  # dcols_l < drows_r:
-        middle, lower = left.diag.split_blocks(drows_r - dcols_l)
-        return KiteMatrix(
-            dense=np.concatenate(
-                (
-                    left.dense @ right.dense[0:dcols_l, :],  # fully dense
-                    middle @ right.dense[dcols_l:, :],  # sparse * dense
-                ),
-                axis=0,
-            ),
-            diag=lower @ right.diag,
-        )
-
-
 class KiteMatrix:
     """A Matrix looking like a kite on a string,
 
     i.e. a dense upper left corner and a diagonal bottom right with identical elements
     """
 
-    __slots__ = "dense", "diag"
+    __slots__ = "dense", "diag", "lower"
 
-    def __init__(self, dense, diag: ScaledIdentity):
+    def __init__(self, dense, diag: ScaledIdentity, *, lower=None):
         self.dense = dense
         self.diag = diag
+        self.lower = lower  # True: lower triangular, False: upper triangular, None: not triangular
 
     @property
     def shape(self):
@@ -143,19 +97,64 @@ class KiteMatrix:
         return KiteMatrix(
             dense=self.dense.T,
             diag=self.diag.T,
+            lower=not self.lower if self.lower is not None else None,
         )
 
     def tosparse(self):
         """Convert to sparse matrix"""
-        return sp.block_array([[self.dense, None], [None, self.diag.tosparse()]])
+        return sp.sparse.block_array([[self.dense, None], [None, self.diag.tosparse()]])
 
     def toarray(self):
         """Convert to dense array"""
         return self.tosparse().toarray()
 
     def __matmul__(self, other):
+        if not self.shape[1] == other.shape[0]:
+            raise ValueError(
+                f"Matmul of shapes {self.shape} and {other.shape} not possible"
+            )
+
         if isinstance(other, KiteMatrix):
-            return _matmul_kitematrix(self, other)
+
+            dcols_l = self.dense.shape[1]  # dense columns of left
+            drows_r = other.dense.shape[0]  # dense rows of right
+
+            if dcols_l == drows_r:
+                return KiteMatrix(
+                    dense=self.dense @ other.dense,
+                    diag=self.diag @ other.diag,
+                )
+
+            elif dcols_l > drows_r:
+                # padd smaller dense matrix by using some of the sparse part
+                middle, rest_diag = other.diag.split_blocks(dcols_l - drows_r)
+                return KiteMatrix(
+                    dense=np.concatenate(
+                        (
+                            self.dense[:, 0:drows_r] @ other.dense,  # fully dense
+                            # unfortunately, dense matrices do not seem to raise NotImplemented
+                            # such that __rmatmul__ is called %TODO: better solution
+                            # pylint: disable=unnecessary-dunder-call
+                            middle.__rmatmul__(
+                                self.dense[:, drows_r:]
+                            ),  # dense * sparse
+                        ),
+                        axis=1,
+                    ),
+                    diag=self.diag @ rest_diag,
+                )
+            else:  # dcols_l < drows_r:
+                middle, rest_diag = self.diag.split_blocks(drows_r - dcols_l)
+                return KiteMatrix(
+                    dense=np.concatenate(
+                        (
+                            self.dense @ other.dense[0:dcols_l, :],  # fully dense
+                            middle @ other.dense[dcols_l:, :],  # sparse * dense
+                        ),
+                        axis=0,
+                    ),
+                    diag=rest_diag @ other.diag,
+                )
 
         # other is not KiteMatrix, split in blocks and multiply block wise
         n = self.dense.shape[1]
@@ -168,6 +167,94 @@ class KiteMatrix:
         return KiteMatrix(
             dense=np.linalg.cholesky(self.dense),
             diag=self.diag.cholesky(),
+        )
+
+    def cho_factor(self, lower=True, overwrite_self=False, check_finite=True):
+        """Cholesky decomposition
+
+        Warning: does not zero the lower/upper triangle. For that use cholesky
+
+        calls scipy.linalg.cho_factor under the hood, which is a wrapper of
+        lapack's POTRF, https://oneapi-src.github.io/oneMKL/domains/lapack/potrf.html
+
+        Important:
+            POTRF guarantees that the upper triangular part is not referenced if lower=True
+            and the lower triangular part is not referenced if lower=False
+        """
+        if overwrite_self:
+            sp.linalg.cho_factor(
+                self.dense, overwrite_a=True, lower=lower, check_finite=check_finite
+            )
+            self.diag = self.diag.cholesky()
+            self.lower = lower
+            return self
+
+        return KiteMatrix(
+            dense=sp.linalg.cho_factor(
+                self.dense, overwrite_a=False, lower=lower, check_finite=check_finite
+            ),
+            diag=self.diag.cholesky(),
+            lower=lower,
+        )
+
+    def cho_solve(self, other, check_finite=True):
+        """Solve the linear system self @ x = b
+
+        calls scipy.linalg.cho_solve under the hood, which is a wrapper around
+        lapack's POTRS, https://oneapi-src.github.io/oneMKL/domains/lapack/potrs.html
+        """
+        if self.lower is None:
+            raise ValueError("Matrix is not triangular")
+
+        if isinstance(other, KiteMatrix):
+            dcols_l = self.dense.shape[1]  # dense columns of left
+            drows_r = other.dense.shape[0]  # dense rows of right
+
+            if dcols_l == drows_r:
+                return KiteMatrix(
+                    dense=sp.linalg.cho_solve(
+                        (self.dense, self.lower),
+                        other.dense,
+                        check_finite=check_finite,
+                    ),
+                    diag=self.diag.solve(other.diag),
+                )
+
+            elif dcols_l > drows_r:
+                # since this will be rarely used anyway, simply enlarge dense matrix on the right
+                middle, rest_diag = other.diag.split_blocks(dcols_l - drows_r)
+                return KiteMatrix(
+                    dense=sp.linalg.cho_solve(
+                        (self.dense, self.lower),
+                        KiteMatrix(dense=other.dense, diag=middle).tosparse(),
+                        check_finite=check_finite,
+                    ),
+                    diag=self.diag.solve(rest_diag),
+                )
+            else:  # dcols_l < drows_r:
+                middle, rest_diag = self.diag.split_blocks(drows_r - dcols_l)
+                return KiteMatrix(
+                    dense=np.concatenate(
+                        (
+                            sp.linalg.cho_solve(
+                                (self.dense, self.lower),
+                                other.dense[0:dcols_l],
+                                check_finite=check_finite,
+                            ),
+                            middle.solve(other.dense[dcols_l:]),
+                        ),
+                        axis=0,
+                    ),
+                    diag=rest_diag.solve(other.diag),
+                )
+
+        return np.concatenate(
+            sp.linalg.cho_solve(
+                (self.dense, self.lower),
+                other[0 : self.dense.shape[1]],
+                check_finite=check_finite,
+            ),
+            self.diag.solve(other[self.dense.shape[1] :], check_finite=check_finite),
         )
 
     def __rmatmul__(self, other):
