@@ -2,6 +2,7 @@
 
 import numpy as np
 import scipy as sp
+from scipy import linalg
 
 
 class ScaledIdentity:
@@ -12,6 +13,9 @@ class ScaledIdentity:
     def __init__(self, scale, dim):
         self.scale = scale
         self.dim = dim
+
+    def __repr__(self):
+        return f"ScaledIdentity(scale={self.scale}, dim={self.dim})"
 
     @property
     def shape(self):
@@ -40,7 +44,13 @@ class ScaledIdentity:
         return ScaledIdentity(np.sqrt(self.scale), self.dim)
 
     def solve(self, other):
-        return other / self.scale, self.scale != 0
+        return other / self.scale
+
+    def __truediv__(self, other):
+        if np.isscalar(other):
+            return ScaledIdentity(self.scale / other, self.dim)
+       
+        raise NotImplementedError
 
     def __matmul__(self, other):
         if self.shape[1] != other.shape[0]:
@@ -78,6 +88,9 @@ class KiteMatrix:
         self.dense = dense
         self.diag = diag
         self.lower = lower  # True: lower triangular, False: upper triangular, None: not triangular
+
+    def __repr__(self):
+        return f"KiteMatrix(dense={self.dense}, diag={self.diag}, lower={self.lower})"
 
     @property
     def shape(self):
@@ -162,11 +175,29 @@ class KiteMatrix:
             (self.dense @ other[0:n, :], self.diag @ other[n:, :]), axis=0
         )
 
-    def cholesky(self):
+    def cholesky(
+        self, lower=True, overwrite_self=False, check_finite=True
+    ) -> "KiteMatrix":
         """Cholesky decomposition of the matrix, assuming it is square"""
+        if overwrite_self:
+            self.dense = linalg.cholesky(
+                self.dense,
+                lower=lower,
+                overwrite_a=True,
+                check_finite=check_finite,
+            )
+            self.diag = self.diag.cholesky()
+            self.lower = lower
+            return self
+
         return KiteMatrix(
-            dense=np.linalg.cholesky(self.dense),
+            dense=linalg.cholesky(
+                self.dense,
+                lower=lower,
+                check_finite=check_finite,
+            ),
             diag=self.diag.cholesky(),
+            lower=lower
         )
 
     def cho_factor(self, lower=True, overwrite_self=False, check_finite=True):

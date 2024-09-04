@@ -1,7 +1,10 @@
 """ Tests for matrices.py """
 
 # pylint: disable=redefined-outer-name
+from typing import Tuple
 import pytest
+
+import scipy as sp
 import numpy as np
 
 from pygrf.matrices import KiteMatrix, ScaledIdentity
@@ -29,7 +32,7 @@ def random_kitematrix_tuple(request):
     return _random_kitematrix(k,n, rng), _random_kitematrix(n,m, rng)
 
 @pytest.fixture
-def random_kitematrix_square(request):
+def random_kitematrix_chol(request):
     """
     Return a random, positive definite Kite Matrix
     with dimensions n x n for random n
@@ -37,9 +40,10 @@ def random_kitematrix_square(request):
     generated using request.param as a seed
     """
     rng = np.random.default_rng(request.param)
-    n = rng.integers(low=1, high=100)
-    mat = _random_kitematrix(n,n, rng)
-    return mat @ mat.T
+    n, k = rng.integers(low=1, high=100, size=2)
+    mat_a = _random_kitematrix(n,n, rng)
+    mat_b = _random_kitematrix(n,k, rng)
+    return mat_a @ mat_a.T, mat_b
 
 @pytest.mark.parametrize("random_kitematrix_tuple", range(100), indirect=True)
 def test_random_matrix_fixture(random_kitematrix_tuple):
@@ -66,16 +70,29 @@ def test_kitematrix_matmul_random(random_kitematrix_tuple):
     res2= (matl @ matr).toarray()
     assert np.allclose(res1, res2)
 
-@pytest.mark.parametrize("random_kitematrix_square", range(100), indirect=True)
-def test_kitematrix_cholesky_random(random_kitematrix_square):
+@pytest.mark.parametrize("random_kitematrix_chol", range(100), indirect=True)
+def test_kitematrix_cholesky_random(random_kitematrix_chol):
     """Test cholesky decomposition with random input"""
-    mat = random_kitematrix_square
-    res1 = np.linalg.cholesky(mat.toarray())
-    res2 = mat.cholesky().toarray()
-    assert np.allclose(res1, res2)
+    mat_sq, mat_b = random_kitematrix_chol
+    lower = True
+    chol_expected = sp.linalg.cholesky(mat_sq.toarray(), lower=lower)
+    solve_expected = sp.linalg.cho_solve((chol_expected, lower), mat_b.toarray())
 
-    res3 = np.linalg.cholesky(np.tril(mat.toarray()))
-    assert np.allclose(res1,res3)
+    chol_actual:KiteMatrix = mat_sq.cholesky()
+    assert np.allclose(chol_expected, chol_actual.toarray())
+
+    solve_actual = chol_actual.cho_solve(mat_b)
+    assert np.allclose(solve_expected, solve_actual.toarray())
+
+
+    # chol_expected = sp.linalg.cho_factor(mat_sq.toarray())
+    # chol_actual = mat_sq.cho_factor().toarray()
+    # assert np.allclose(chol_expected, chol_actual)
+
+
+
+    res3 = np.linalg.cholesky(np.tril(mat_sq.toarray()))
+    assert np.allclose(chol_expected,res3)
 
 
 
