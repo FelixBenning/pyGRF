@@ -1,7 +1,6 @@
 """ Tests for matrices.py """
 
 # pylint: disable=redefined-outer-name
-from typing import Tuple
 import pytest
 
 import scipy as sp

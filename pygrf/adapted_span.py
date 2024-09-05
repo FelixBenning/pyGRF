@@ -1,99 +1,87 @@
+""" The adapted span V_t from the paper """
+
 import numpy as np
 
-def is_scalar(x):
-    """ boolean check if x is a scalar """
-    return not hasattr(x, '__len__') # is this a sufficient check?
+from .basis import OrthogonalBasis, CoordinateVec
 
-class LazyAdaptedSpan():
-    """ A lazy version of the Adapted Span V_t """
-    __slots__ = '_dim', '_basis'
+def last_nonzero_col(matrix):
+    return np.flatnonzero(matrix.T)[-1] // np.atleast_2d(matrix).T.shape[0]
 
-    def __init__(self, *, dim=np.inf, init_basis=None) -> None:
-        self._basis = [] if init_basis is None else init_basis
-        self._dim = dim
+class LazyAdaptedSpan(OrthogonalBasis):
+    """A lazy version of the Adapted Span V_t"""
 
-    def as_standard_basis(self, coeffs):
-        """ Convert the coefficients to the standard basis """
-        self.eager(len(coeffs))
-        return sum(coeff * basis for coeff, basis in zip(coeffs, self._basis))
+    __solts__ = "_dim_t", "_frozen", "rng"
 
+    def __init__(self, *, dim=None, row_basis=None, rng=np.random.default_rng()) -> None:
+        if dim is None and row_basis is None:
+            raise ValueError("Either dim or initial basis must be provided")
 
-    def __getitem__(self, idx):
-        if idx < len(self._basis):
-            return self._basis[idx]
-        if idx < self._dim:
-            self.eager(idx + 1)
-            return self._basis[idx]
+        init_basis = np.empty((0, dim)) if row_basis is None else row_basis
 
-    def to_span(self, vec) -> 'LazyVec':
-        """ Convert a vector to LazyVec of the span """
+        super().__init__(init_basis)
 
-        # no-op if already LazyVec with this span
-        if isinstance(vec, LazyVec) and vec.basis == self:
-            return vec
+        self._dim_t = init_basis.shape[0]
+        self._frozen = False
+        self.rng = rng
 
-        # unfortunately have to do work now
-        coeffs = []
-        w = vec
-        for v in enumerate(self._basis):
-            coeff = np.dot(v,w)
-            coeffs.append(coeff)
-            w -= coeff * v
-            if w == 0:
-                break
+    def coeff_into_std_basis(self, coeffs):
+        needed_basis_len = last_nonzero_col(coeffs)+1
+        self.ensure_eager(needed_basis_len)
+        return coeffs[:, :needed_basis_len] @ self.basis_matrix[:needed_basis_len]
 
-        if w != 0:
-            # vec was linear independent of existing span
-            coeff = np.linalg.norm(w)
-            coeffs.append(coeff)
-            self._basis.append(w/coeff) # normalize & append
+    def coeff_from_std_basis(self, row_vecs):
+        if len(row_vecs.shape) == 1:
+            return self.coeff_from_vec(row_vecs)
 
-        return LazyVec(basis_ref=self, coeffs=coeffs)
+        # effecitvely gram-schmidt
+        coeff_list = [self.coeff_from_vec(row) for row in row_vecs]
+        n = len(coeff_list)
+        m = len(coeff_list[-1])
+        result= np.empty((n, m))
+        for i, coeff in enumerate(coeff_list):
+            result[i, :len(coeff)] = coeff
+        return result
+
+    def _project_to_current(self, row_vecs):
+        """ project a row vector to the currently available basis """
+        coeff = row_vecs @ self.basis_matrix.T
+        residual = row_vecs - coeff @ self.basis_matrix
+        return coeff, residual
 
 
-    def eager(self, n):
+    def coeff_from_vec(self, vec):
+        """ Convert a single vector to coefficients with respect to the current basis """
+        assert len(vec.shape) == 1, "vec must be a 1D array"
 
-        pass
+        self.ensure_eager(self._dim_t)
+        prelim_coeff, residual = self._project_to_current(vec)
+        if np.allclose(residual, 0):  # check if residual is zero
+            return prelim_coeff
 
+        # residual is not zero
+        if self._frozen:
+            raise ValueError("Cannot extend the basis after it was frozen")
 
-class LazyVec():
-    """ Object which represents a lazily evaluated vector """
-    __slots__ = 'basis', 'coeffs'
+        # add residual to the basis
+        coeff = np.linalg.norm(residual)
 
-    def __init__(self, basis_ref: LazyAdaptedSpan, coeffs) -> None:
-        self.basis = basis_ref
-        self.coeffs = coeffs
+        n,m = self.basis_matrix.shape
+        self.basis_matrix.resize(n+1, m)
+        self._dim_t += 1
+        self.basis_matrix[-1] = residual / coeff
 
-    def eager(self) -> np.array:
-        """ Cacluate the vector eagerly """
-        return self.basis.as_standard_basis(self.coeffs)
+        prelim_coeff.resize(len(prelim_coeff) + 1)
+        prelim_coeff[-1] = coeff
 
-    def __add__(self, other):
-        if isinstance(other, LazyVec) and self.basis == other.basis:
-            return LazyVec(self.basis, self.coeffs + other.coeffs)
+        return prelim_coeff
 
-        return self.eager() + other
+    def ensure_eager(self, needed_basis_len):
+        if needed_basis_len > self._dim_t:
+            raise ValueError("Cannot reference basis vectors of the future")
 
-    def __radd__(self, other):
-        return self + other
-
-    def __mul__(self, other):
-        if is_scalar(other):
-            return LazyVec(self.basis, other * self.coeffs)
-
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __sub__(self, other):
-        if isinstance(other, LazyVec) and self.basis == other.basis:
-            return LazyVec(self.basis, self.coeffs - other.coeffs)
-
-        return self.eager() - other
-
-    def __rsub__(self, other):
-        if isinstance(other, LazyVec) and self.basis == other.basis:
-            return LazyVec(self.basis, self.coeffs - other.coeffs)
-
-        return other - self.eager()
+        d_eager, dim = self.basis_matrix.shape
+        self.basis_matrix.resize(max(d_eager, needed_basis_len), dim)
+        for idx in range(d_eager, needed_basis_len):
+            _, residual = self._project_to_current(self.rng.random(dim))
+            residual /= np.linalg.norm(residual)
+            self.basis_matrix[idx] = self.rng.random(residual)

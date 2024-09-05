@@ -49,7 +49,7 @@ class ScaledIdentity:
     def __truediv__(self, other):
         if np.isscalar(other):
             return ScaledIdentity(self.scale / other, self.dim)
-       
+
         raise NotImplementedError
 
     def __matmul__(self, other):
@@ -197,7 +197,7 @@ class KiteMatrix:
                 check_finite=check_finite,
             ),
             diag=self.diag.cholesky(),
-            lower=lower
+            lower=lower,
         )
 
     def cho_factor(self, lower=True, overwrite_self=False, check_finite=True):
@@ -228,10 +228,8 @@ class KiteMatrix:
             lower=lower,
         )
 
-    def solve_triangular(self, other, trans='N', check_finite=True):
-        """Solve the linear system self @ x = b
-
-        """
+    def solve_triangular(self, other, trans="N", check_finite=True):
+        """Solve the linear system self @ x = b"""
         if self.lower is None:
             raise ValueError("Matrix is not triangular")
 
