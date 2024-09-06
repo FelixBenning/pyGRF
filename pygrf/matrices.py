@@ -35,6 +35,11 @@ class ScaledIdentity:
         """Convert to sparse matrix"""
         return sp.sparse.diags(np.full(self.dim, self.scale))
 
+    def __array__(self, dtype=None, copy=None):
+        if copy is False:
+            raise ValueError("copy=False is not supported. A copy is always made.")
+        return np.array(self.toarray(), dtype=dtype)
+
     def toarray(self):
         """Convert to dense array"""
         return self.tosparse().toarray()

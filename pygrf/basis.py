@@ -4,6 +4,7 @@ from numbers import Number
 import abc
 
 import scipy as sp
+import numpy as np
 
 
 
@@ -64,6 +65,15 @@ class CoordinateVec:
     def __init__(self, basis_ref: Basis, coeffs) -> None:
         self.basis = basis_ref
         self.coeffs = coeffs
+
+    def __array__(self, dtype=None, copy=None):
+        if copy is False:
+            raise ValueError("copy=False is not supported. A copy is always made.")
+
+        return np.array(
+            self.basis.coeff_into_std_basis(self.coeffs),
+            dtype=dtype
+        )
 
     def in_std_basis(self):
         """Translate to standard basis"""
