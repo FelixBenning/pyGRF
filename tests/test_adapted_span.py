@@ -6,8 +6,6 @@ import numpy as np
 
 from pygrf.adapted_span import LazyAdaptedSpan
 
-from .test_basis import random_basis
-
 
 @pytest.mark.parametrize("seed", range(100))
 def test_adapted_span(seed):
@@ -25,7 +23,7 @@ def test_adapted_span(seed):
     assert c1[0] == pytest.approx(np.linalg.norm(vecs[0]))
     assert len(adapted_span) == 1
 
-    # getting the coefficients again should not change eager length 
+    # getting the coefficients again should not change eager length
     adapted_span.coeff_from_std_basis(vecs[0])
     assert len(adapted_span) == 1
 

@@ -1,6 +1,5 @@
 """ The adapted span V_t from the paper """
 
-from weakref import ref
 import numpy as np
 
 from .basis import OrthogonalBasis

@@ -233,7 +233,7 @@ class KiteMatrix:
             lower=lower,
         )
 
-    def solve_triangular(self, other, trans="N", check_finite=True):
+    def solve_triangular(self, other, trans="N", inplace=False, check_finite=True):
         """Solve the linear system self @ x = b"""
         if self.lower is None:
             raise ValueError("Matrix is not triangular")
@@ -250,6 +250,7 @@ class KiteMatrix:
                         lower=self.lower,
                         trans=trans,
                         check_finite=check_finite,
+                        overwrite_b=inplace,
                     ),
                     diag=self.diag.solve(other.diag),
                 )
@@ -264,6 +265,7 @@ class KiteMatrix:
                         lower=self.lower,
                         trans=trans,
                         check_finite=check_finite,
+                        overwrite_b=inplace,
                     ),
                     diag=self.diag.solve(rest_diag),
                 )
@@ -278,6 +280,7 @@ class KiteMatrix:
                                 lower=self.lower,
                                 trans=trans,
                                 check_finite=check_finite,
+                                overwrite_b=inplace,
                             ),
                             middle.solve(other.dense[dcols_l:]),
                         ),
