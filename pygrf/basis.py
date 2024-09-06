@@ -11,11 +11,11 @@ import numpy as np
 class Basis(abc.ABC):
     """ Basis of a vector space"""
 
-    __slots__ = ("basis_matrix",)
+    __slots__ = ("_basis_matrix",)
 
     def __init__(self, row_basis) -> None:
         """The rows of the basis matrix are the basis vectors"""
-        self.basis_matrix = row_basis
+        self._basis_matrix = row_basis
 
     def into_basis(self, vec):
         """ Convert a vector to this basis """
@@ -32,11 +32,11 @@ class Basis(abc.ABC):
     def coeff_from_std_basis(self, row_vecs):
         """ Convert standard basis representation into rows of coefficients """
         # col_basis @ col_coeff = col_vecs -> row_basis.T @ row_coeff.T = row_vecs.T
-        return sp.linalg.solve(self.basis_matrix, row_vecs.T, transposed=True).T
+        return sp.linalg.solve(self._basis_matrix, row_vecs.T, transposed=True).T
 
     def coeff_into_std_basis(self, coeffs):
         """Convert coefficients into standard basis representation """
-        return  coeffs @ self.basis_matrix
+        return  coeffs @ self._basis_matrix
 
 
 class OrthogonalBasis(Basis):
@@ -49,7 +49,7 @@ class OrthogonalBasis(Basis):
         # row_basis.T @ row_coeff.T = row_vecs.T
         # -> row_coeff.T = row_basis @ row_vecs.T
         # -> row_coeff = row_vecs @ row_basis.T
-        return row_vecs @ self.basis_matrix.T
+        return row_vecs @ self._basis_matrix.T
 
 
 class StandardBasis(OrthogonalBasis):
