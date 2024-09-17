@@ -36,7 +36,7 @@ class LazyAdaptedSpan(OrthogonalBasis):
 
         # if dim = shape[1], then the following will be empty and skipped
         # if dim = self._dim_t then there can not be larger coefficients
-        if np.any(coeff_2d[:, dim:]):
+        if np.any(coeff_2d[:, dim:].nonzero()):
             raise ValueError("Cannot reference basis vectors of the future")
 
         self.ensure_eager(dim)
@@ -81,6 +81,11 @@ class LazyAdaptedSpan(OrthogonalBasis):
         self._eager += 1
 
         return out
+ 
+    def add_random_orthogonal(self):
+        """Add a random orthogonal vector to the basis"""
+        self._dim_t += 1
+        # lazy, only actually generate vec if needed
 
     def ensure_eager(self, needed_basis_len):
         """Ensure that the eagerly calculated part of matrix

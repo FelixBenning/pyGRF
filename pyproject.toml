@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.11"
 numpy = "^2.1.0"
 scipy = "^1.14.1"
+sympy = "^1.13.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.8.0"
