@@ -227,6 +227,20 @@ pluggy = ">=1.5,<2"
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pytest-regtest"
+version = "2.1.1"
+description = "pytest plugin for snapshot regression testing"
+category = "dev"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+pytest = ">7.2"
+
+[package.extras]
+dev = ["black", "build", "hatchling", "pre-commit", "ruff", "twine", "wheel"]
+
+[[package]]
 name = "scipy"
 version = "1.14.1"
 description = "Fundamental algorithms for scientific computing in Python"
@@ -267,7 +281,7 @@ python-versions = ">=3.8"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.11"
-content-hash = "c160c89e8d6663cafb2b2a0761fc8d06e71b0a8d425765a4e5f17061457f789e"
+content-hash = "609ebf41ce8f6964cc1471f801169978628b40c7f8893c1c458e907fcc8cb151"
 
 [metadata.files]
 astroid = [
@@ -420,6 +434,9 @@ pylint = [
 pytest = [
     {file = "pytest-8.3.2-py3-none-any.whl", hash = "sha256:4ba08f9ae7dcf84ded419494d229b48d0903ea6407b030eaec46df5e6a73bba5"},
     {file = "pytest-8.3.2.tar.gz", hash = "sha256:c132345d12ce551242c87269de812483f5bcc87cdbb4722e48487ba194f9fdce"},
+]
+pytest-regtest = [
+    {file = "pytest_regtest-2.1.1.tar.gz", hash = "sha256:bd08a6161832378b59ecd4f5815fbe26af7cd091db4a1e710e30476d5f3b8832"},
 ]
 scipy = [
     {file = "scipy-1.14.1-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:b28d2ca4add7ac16ae8bb6632a3c86e4b9e4d52d3e34267f6e1b0c1f8d87e389"},

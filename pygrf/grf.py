@@ -4,7 +4,7 @@ import numpy as np
 from numbers import Number
 
 from .adapted_span import LazyAdaptedSpan
-from .kernels import LinearIsotropicKernel
+from .kernels import IsotropicKernel
 
 
 class BlockCholesky:
@@ -46,7 +46,7 @@ class LinIsotropicGRF:
         "_coeffs",
     )
 
-    def __init__(self, *, mean, kernel: LinearIsotropicKernel, dim, rng=None) -> None:
+    def __init__(self, *, mean, kernel: IsotropicKernel, dim, rng=None) -> None:
         if isinstance(rng, Number) or rng is None:
             self._rng = np.random.default_rng(rng) 
         elif isinstance(rng, np.random.Generator):
