@@ -130,11 +130,11 @@ class IsotropicKernel(Kernel):
 
         result[dloc[0]:dloc[1], :, dloc[0]:dloc[1], :] = (
             # derivative c1, c1 points, derivative c2, c2 points
-            k_12[np.newaxis,:,np.newaxis,:] * _c1.T[:,:,np.newaxis, np.newaxis] * _c2.T[np.newaxis,np.newaxis,:,:]
-            + k_13[np.newaxis,:,np.newaxis,:] * _c1.T[:,:,np.newaxis, np.newaxis] * _c1.T[np.newaxis, :, :, np.newaxis]
-            + k_23[np.newaxis,:,np.newaxis,:] * _c2.T[:,:,np.newaxis,np.newaxis] * _c2.T[:, np.newaxis, np.newaxis, :]
-            + k_33[np.newaxis,:,np.newaxis,:] * _c2.T[:,np.newaxis,np.newaxis,:] * _c1[np.newaxis,:, :, np.newaxis]
-        ) + k_3[np.newaxis,:,np.newaxis, :] * np.identity(basis_len)[:,np.newaxis, :, np.newaxis]
+            np.einsum("kl,ki,lj->ikjl", k_12, _c1, _c2) 
+            + np.einsum("kl,ki,kj->ikjl", k_13, _c1, _c1)
+            + np.einsum("kl,li,lj->ikjl", k_23, _c2, _c2)
+            + np.einsum("kl,kj,li->ikjl", k_33, _c1, _c2)
+        ) + np.einsum("kl,ij->ikjl", k_3, np.identity(basis_len))
 
         return result
 

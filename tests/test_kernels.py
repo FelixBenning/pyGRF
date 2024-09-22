@@ -17,4 +17,5 @@ def test_squared_exponential(regtest):
     print(res, file=regtest)
 
     res = k.covariance(std_basis, std_basis, derivatives=1)
-    print(res.reshape(res.shape[0]*res.shape[1], res.shape[2]*res.shape[3]), file=regtest)
+    res = res.reshape(res.shape[0]*res.shape[1], res.shape[2]*res.shape[3])
+    print(res, file=regtest)
