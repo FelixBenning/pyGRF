@@ -144,7 +144,7 @@ class IsotropicKernel(Kernel):
         _c2 = np.atleast_2d(c2)
         c1_norms = np.einsum("ij,ij,->i", _c1, _c1, 0.5)  # row-wise squared norms
         c2_norms = np.einsum("ij,ij,->i", _c2, _c2, 0.5)  # row-wise squared norms
-        c1_dot_c2 = np.einsum("ij,jk->ik", _c1, _c2)  # c1 @ c2.T (row-wise dot products)
+        c1_dot_c2 = np.einsum("ij,kj->ik", _c1, _c2)  # c1 @ c2.T (row-wise dot products)
 
         return np.stack(
             (
