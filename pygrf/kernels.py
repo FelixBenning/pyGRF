@@ -142,9 +142,9 @@ class IsotropicKernel(Kernel):
     def prepare_kernel_inputs(self, c1, c2):
         _c1 = np.atleast_2d(c1)
         _c2 = np.atleast_2d(c2)
-        c1_norms = np.einsum("ij,ij,->i", _c1, _c1, 0.5)  # row-wise squared norms
-        c2_norms = np.einsum("ij,ij,->i", _c2, _c2, 0.5)  # row-wise squared norms
-        c1_dot_c2 = np.einsum("ij,kj->ik", _c1, _c2)  # c1 @ c2.T (row-wise dot products)
+        c1_norms = np.einsum("ki,ki,->k", _c1, _c1, 0.5)  # row-wise squared norms
+        c2_norms = np.einsum("lj,lj,->l", _c2, _c2, 0.5)  # row-wise squared norms
+        c1_dot_c2 = np.einsum("ki,li->kl", _c1, _c2)  # c1 @ c2.T (row-wise dot products)
 
         return np.stack(
             (
