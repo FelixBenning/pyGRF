@@ -133,7 +133,7 @@ class IsotropicKernel(Kernel):
             np.einsum("kl,ki,lj->ikjl", k_12, _c1, _c2) 
             + np.einsum("kl,ki,kj->ikjl", k_13, _c1, _c1)
             + np.einsum("kl,li,lj->ikjl", k_23, _c2, _c2)
-            + np.einsum("kl,kj,li->ikjl", k_33, _c1, _c2)
+            + np.einsum("kl,li,kj->ikjl", k_33, _c2, _c1)
         ) + np.einsum("kl,ij->ikjl", k_3, np.identity(basis_len))
 
         return result

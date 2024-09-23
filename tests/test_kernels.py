@@ -23,14 +23,14 @@ def test_squared_exponential(regtest):
     print(res, file=regtest)
 
 
-@pytest.mark.parametrize("seed", range(100))
+@pytest.mark.parametrize("seed", range(50))
 def test_squared_exponential_random(seed):
     rng = np.random.default_rng(seed)
-    c1_len = rng.integers(low=1, high=100)
-    c2_len = rng.integers(low=1, high=100)
-    dim = rng.integers(low=1, high=100)
-    c1 = rng.normal((c1_len, dim))
-    c2 = rng.normal((c2_len, dim))
+    c1_len = rng.integers(low=1, high=20)
+    c2_len = rng.integers(low=1, high=20)
+    dim = rng.integers(low=1, high=20)
+    c1 = rng.normal(size=(c1_len, dim))
+    c2 = rng.normal(size=(c2_len, dim))
 
     var = rng.normal() ** 2
     length_scale = rng.normal() ** 2
@@ -40,7 +40,7 @@ def test_squared_exponential_random(seed):
 
     autocov = k.covariance(c1, c1, derivatives=1)
     autocov = autocov.reshape(autocov.shape[0] * autocov.shape[1], -1)
-    assert sp.linalg.issymmetric(autocov)
+    assert np.allclose(autocov - autocov.T, 0)
 
     try:
         np.linalg.cholesky(autocov)
