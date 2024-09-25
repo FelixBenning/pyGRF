@@ -109,17 +109,16 @@ class IsotropicKernel(Kernel):
         k_3 = np.apply_along_axis(self[3], axis=0, arr=kernel_inputs)
         result[0, :, dloc[0]:dloc[1], :] = (
             # c1 points, derivative axis, c2 points
-            k_2[:,np.newaxis,:] * _c2.T[np.newaxis,:,:]
-            + k_3[:,np.newaxis,:] * _c1[:,:,np.newaxis]
+            np.einsum("kl,lj->kjl", k_2, _c2)
+            + np.einsum("kl,kj->kjl", k_3, _c1)
         )
         # EXPLANATION: k2 and k3 have no derivative axis and are only
         # indexed by the points in c1 and c2
         # the coordinates of c1 and c2 match the derivative axis
 
         result[dloc[0]:dloc[1], :, 0, :] = (
-            # derivative axis, c1 points, c2 points
-            k_1[np.newaxis,:,:] * _c1.T[:,:,np.newaxis]
-            + k_3[np.newaxis,:,:] * _c2.T[:,np.newaxis,:]
+            np.einsum("kl,ki->ikl", k_1, _c1)
+            + np.einsum("kl,li->ikl", k_3, _c2)
         )
         ## ---- cov derivative with derivative -----
 
