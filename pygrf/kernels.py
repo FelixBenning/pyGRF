@@ -92,10 +92,10 @@ class IsotropicKernel(Kernel):
         # => dloc[ord-1]:dloc[ord] is the location of derivatives of order ord
         # e.g. dloc[0]:dloc[1] = 1:(1+d) is the location of the 1-th order derivatives
 
-        result = np.empty((dloc[-1], _c1.shape[0] , dloc[-1], _c2.shape[0]))
+        result = np.empty((_c1.shape[0], dloc[-1], _c2.shape[0], dloc[-1]))
 
         # no derivative
-        result[0, :, 0, :] = np.apply_along_axis(self[()], axis=0, arr=kernel_inputs)
+        result[:,0,:,0] = np.apply_along_axis(self[()], axis=0, arr=kernel_inputs)
         if derivatives == 0:
             # pylint: disable=unexpected-keyword-arg
             # copy is a valid keyword argument (https://github.com/numpy/numpy/issues/27373)
@@ -107,18 +107,18 @@ class IsotropicKernel(Kernel):
         k_1 = np.apply_along_axis(self[1], axis=0, arr=kernel_inputs)
         k_2 = np.apply_along_axis(self[2], axis=0, arr=kernel_inputs)
         k_3 = np.apply_along_axis(self[3], axis=0, arr=kernel_inputs)
-        result[0, :, dloc[0]:dloc[1], :] = (
+        result[:, 0, :, dloc[0]:dloc[1]] = (
             # c1 points, derivative axis, c2 points
-            np.einsum("kl,lj->kjl", k_2, _c2)
-            + np.einsum("kl,kj->kjl", k_3, _c1)
+            np.einsum("kl,lj->klj", k_2, _c2)
+            + np.einsum("kl,kj->klj", k_3, _c1)
         )
         # EXPLANATION: k2 and k3 have no derivative axis and are only
         # indexed by the points in c1 and c2
         # the coordinates of c1 and c2 match the derivative axis
 
-        result[dloc[0]:dloc[1], :, 0, :] = (
-            np.einsum("kl,ki->ikl", k_1, _c1)
-            + np.einsum("kl,li->ikl", k_3, _c2)
+        result[:, dloc[0]:dloc[1], :, 0] = (
+            np.einsum("kl,ki->kil", k_1, _c1)
+            + np.einsum("kl,li->kil", k_3, _c2)
         )
         ## ---- cov derivative with derivative -----
 
@@ -127,13 +127,13 @@ class IsotropicKernel(Kernel):
         k_23 = np.apply_along_axis(self[2,3], axis=0, arr=kernel_inputs)
         k_33 = np.apply_along_axis(self[3,3], axis=0, arr=kernel_inputs)
 
-        result[dloc[0]:dloc[1], :, dloc[0]:dloc[1], :] = (
+        result[:, dloc[0]:dloc[1], :, dloc[0]:dloc[1]] = (
             # derivative c1, c1 points, derivative c2, c2 points
-            np.einsum("kl,ki,lj->ikjl", k_12, _c1, _c2) 
-            + np.einsum("kl,ki,kj->ikjl", k_13, _c1, _c1)
-            + np.einsum("kl,li,lj->ikjl", k_23, _c2, _c2)
-            + np.einsum("kl,li,kj->ikjl", k_33, _c2, _c1)
-        ) + np.einsum("kl,ij->ikjl", k_3, np.identity(basis_len))
+            np.einsum("kl,ki,lj->kilj", k_12, _c1, _c2) 
+            + np.einsum("kl,ki,kj->kilj", k_13, _c1, _c1)
+            + np.einsum("kl,li,lj->kilj", k_23, _c2, _c2)
+            + np.einsum("kl,li,kj->kilj", k_33, _c2, _c1)
+        ) + np.einsum("kl,ij->kilj", k_3, np.identity(basis_len))
 
         return result
 
