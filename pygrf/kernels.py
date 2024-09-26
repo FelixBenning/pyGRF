@@ -56,7 +56,7 @@ class IsotropicKernel(Kernel):
     def __init__(self, kernel_expression):
         self._kernel_func_expr = kernel_expression
 
-    def covariance(self, c1, c2, /, *, derivatives=0, basis=None):
+    def covariance(self, c1, c2, /, *, derivatives=0, basis=None, new_dir=False):
         """Compute the covariance between coordinates c1 and c2 with
         respect to `basis', assume standard basis if basis=None.
 
@@ -64,10 +64,10 @@ class IsotropicKernel(Kernel):
 
         [i1, c1, i2, c2] = cov(D_{v_1} c_1[i1], D_{v_2} c_2[i2])
 
-        for v1 in derivatives
-            for i1 in c_1
-                for v2 in derivatives
-                    for i2 in c2
+        for i1 in c_1
+            for v1 in derivatives
+                for i2 in c2
+                    for v2 in derivatives
                         cov(D_{v_1} c_1[i1], D_{v_2} c_2[i2])
 
         if derivatives>0, also compute the derivatives
@@ -108,13 +108,9 @@ class IsotropicKernel(Kernel):
         k_2 = np.apply_along_axis(self[2], axis=0, arr=kernel_inputs)
         k_3 = np.apply_along_axis(self[3], axis=0, arr=kernel_inputs)
         result[:, 0, :, dloc[0]:dloc[1]] = (
-            # c1 points, derivative axis, c2 points
             np.einsum("kl,lj->klj", k_2, _c2)
             + np.einsum("kl,kj->klj", k_3, _c1)
         )
-        # EXPLANATION: k2 and k3 have no derivative axis and are only
-        # indexed by the points in c1 and c2
-        # the coordinates of c1 and c2 match the derivative axis
 
         result[:, dloc[0]:dloc[1], :, 0] = (
             np.einsum("kl,ki->kil", k_1, _c1)
@@ -135,6 +131,8 @@ class IsotropicKernel(Kernel):
             + np.einsum("kl,li,kj->kilj", k_33, _c2, _c1)
         ) + np.einsum("kl,ij->kilj", k_3, np.identity(basis_len))
 
+        if new_dir:
+            return result, k_3
         return result
 
 
