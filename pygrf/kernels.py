@@ -28,7 +28,7 @@ def partial_derivatives(func, indices, dim=3, index_start=1):
     t = sym.symbols(f"t{index_start}:{dim+index_start}")
     expr = func(*t)
     for idx in _key:
-        expr = sym.diff(expr, t[idx-index_start])
+        expr = sym.diff(expr, t[idx - index_start])
 
     return sym.lambdify(t, expr)
 
@@ -47,7 +47,7 @@ class Kernel:
 
 
 class IsotropicKernel(Kernel):
-    """ (Non-stationary) isotropic kernel of the form
+    """(Non-stationary) isotropic kernel of the form
 
     k(x,y) = kernel_expression(norm(x)**2/2, norm(y)**2/2, dot(x,y))
     """
@@ -86,7 +86,7 @@ class IsotropicKernel(Kernel):
         if basis:
             assert len(basis) == basis_len
 
-        dloc = np.cumsum([basis_len ** order for order in range(derivatives + 1)])
+        dloc = np.cumsum([basis_len**order for order in range(derivatives + 1)])
         # [1, 1+d, 1+d d^2, ...]
         # => dloc[ord-1]:dloc[ord] is the location of derivatives of order ord
         # e.g. dloc[0]:dloc[1] = 1:(1+d) is the location of the 1-th order derivatives
@@ -94,7 +94,7 @@ class IsotropicKernel(Kernel):
         result = np.empty((_c1.shape[0], dloc[-1], _c2.shape[0], dloc[-1]))
 
         # no derivative
-        result[:,0,:,0] = np.apply_along_axis(self[()], axis=0, arr=kernel_inputs)
+        result[:, 0, :, 0] = np.apply_along_axis(self[()], axis=0, arr=kernel_inputs)
         if derivatives == 0:
             # pylint: disable=unexpected-keyword-arg
             # copy is a valid keyword argument (https://github.com/numpy/numpy/issues/27373)
@@ -106,25 +106,23 @@ class IsotropicKernel(Kernel):
         k_1 = np.apply_along_axis(self[1], axis=0, arr=kernel_inputs)
         k_2 = np.apply_along_axis(self[2], axis=0, arr=kernel_inputs)
         k_3 = np.apply_along_axis(self[3], axis=0, arr=kernel_inputs)
-        result[:, 0, :, dloc[0]:dloc[1]] = (
-            np.einsum("kl,lj->klj", k_2, _c2)
-            + np.einsum("kl,kj->klj", k_3, _c1)
-        )
+        result[:, 0, :, dloc[0] : dloc[1]] = np.einsum(
+            "kl,lj->klj", k_2, _c2
+        ) + np.einsum("kl,kj->klj", k_3, _c1)
 
-        result[:, dloc[0]:dloc[1], :, 0] = (
-            np.einsum("kl,ki->kil", k_1, _c1)
-            + np.einsum("kl,li->kil", k_3, _c2)
-        )
+        result[:, dloc[0] : dloc[1], :, 0] = np.einsum(
+            "kl,ki->kil", k_1, _c1
+        ) + np.einsum("kl,li->kil", k_3, _c2)
         ## ---- cov derivative with derivative -----
 
-        k_12 = np.apply_along_axis(self[1,2], axis=0, arr=kernel_inputs)
-        k_13 = np.apply_along_axis(self[1,3], axis=0, arr=kernel_inputs)
-        k_23 = np.apply_along_axis(self[2,3], axis=0, arr=kernel_inputs)
-        k_33 = np.apply_along_axis(self[3,3], axis=0, arr=kernel_inputs)
+        k_12 = np.apply_along_axis(self[1, 2], axis=0, arr=kernel_inputs)
+        k_13 = np.apply_along_axis(self[1, 3], axis=0, arr=kernel_inputs)
+        k_23 = np.apply_along_axis(self[2, 3], axis=0, arr=kernel_inputs)
+        k_33 = np.apply_along_axis(self[3, 3], axis=0, arr=kernel_inputs)
 
-        result[:, dloc[0]:dloc[1], :, dloc[0]:dloc[1]] = (
+        result[:, dloc[0] : dloc[1], :, dloc[0] : dloc[1]] = (
             # derivative c1, c1 points, derivative c2, c2 points
-            np.einsum("kl,ki,lj->kilj", k_12, _c1, _c2) 
+            np.einsum("kl,ki,lj->kilj", k_12, _c1, _c2)
             + np.einsum("kl,ki,kj->kilj", k_13, _c1, _c1)
             + np.einsum("kl,li,lj->kilj", k_23, _c2, _c2)
             + np.einsum("kl,li,kj->kilj", k_33, _c2, _c1)
@@ -134,13 +132,14 @@ class IsotropicKernel(Kernel):
             return result, k_3
         return result
 
-
     def prepare_kernel_inputs(self, c1, c2):
         _c1 = np.atleast_2d(c1)
         _c2 = np.atleast_2d(c2)
         c1_norms = np.einsum("ki,ki,->k", _c1, _c1, 0.5)  # row-wise squared norms
         c2_norms = np.einsum("lj,lj,->l", _c2, _c2, 0.5)  # row-wise squared norms
-        c1_dot_c2 = np.einsum("ki,li->kl", _c1, _c2)  # c1 @ c2.T (row-wise dot products)
+        c1_dot_c2 = np.einsum(
+            "ki,li->kl", _c1, _c2
+        )  # c1 @ c2.T (row-wise dot products)
 
         return np.stack(
             (
@@ -160,25 +159,29 @@ class IsotropicKernel(Kernel):
 
 
 class StationaryIsotropicKernel(IsotropicKernel):
-    """ Stationary isotropic kernel of the form
+    """Stationary isotropic kernel of the form
 
     k(x,y) = kernel_expression(-norm(x-y)**2/2)
     """
+
     def __init__(self, kernel_expression):
-        def isotropic_kernel(sq_norm_half_1, sq_norm_half_2,dot): 
+        def isotropic_kernel(sq_norm_half_1, sq_norm_half_2, dot):
             neg_sq_norm_dist_half = dot - sq_norm_half_1 - sq_norm_half_2
             return kernel_expression(neg_sq_norm_dist_half)
+
         super().__init__(isotropic_kernel)
 
+
 class SquaredExponentialKernel(StationaryIsotropicKernel):
-    """ Squared Exponential Kernel
+    """Squared Exponential Kernel
 
     k(x,y) = variance * exp(-norm(x-y)**2/(2*length_scale**2))
     """
+
     def __init__(self, variance=1.0, length_scale=1.0):
         self._variance = variance
         self._length_scale = length_scale
-        super().__init__(lambda x: variance*sym.exp(x/length_scale**2))
- 
+        super().__init__(lambda x: variance * sym.exp(x / length_scale**2))
+
     def __repr__(self):
         return f"SquaredExponentialKernel(variance={self._variance}, length_scale={self._length_scale})"

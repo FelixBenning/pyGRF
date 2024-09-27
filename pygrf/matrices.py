@@ -1,5 +1,6 @@
 """ Implement special matrices """
 
+from numbers import Number
 import numpy as np
 import scipy as sp
 from scipy import linalg
@@ -38,11 +39,11 @@ class ScaledIdentity:
     def __array__(self, dtype=None, copy=None):
         if copy is False:
             raise ValueError("copy=False is not supported. A copy is always made.")
-        return np.array(self.toarray(), dtype=dtype)
+        return self.scale * np.eye(self.dim, dtype=dtype)
 
     def toarray(self):
         """Convert to dense array"""
-        return self.tosparse().toarray()
+        return self.__array__()
 
     def cholesky(self):
         """Cholesky decomposition of itself"""
@@ -117,6 +118,40 @@ class KiteMatrix:
             diag=self.diag.T,
             lower=not self.lower if self.lower is not None else None,
         )
+
+    def __isub__(self, b):
+        if isinstance(b, Number):
+            self.dense -= b
+            self.diag.scale -= b
+            return self
+
+        if not self.shape == b.shape:
+            raise ValueError(
+                f"can not subtract subtrahend with shape {b.shape} "
+                + f"from minuent with shape {self.shape}"
+            )
+
+        if isinstance(b, KiteMatrix):
+            b_shape = b.dense.shape
+            self.ensure_dense_size(b_shape[0])  # assume square
+            self.dense[: b_shape[0], : b_shape[1]] -= b.dense
+            if (pad := self.dense.shape[0] - b_shape[0]) > 0:
+                self.dense[-pad:, -pad:] -= b.diag.scale * np.eye(pad)
+            self.diag.scale -= b.diag.scale
+            return self
+
+        raise NotImplementedError()
+
+    def ensure_dense_size(self, dim):
+        """ensure the size of the dense matrix is at least dim
+
+        assuming a square dense matrix
+        """
+        pad = dim - self.dense.shape[0]
+        if pad > 0:
+            self.dense = np.pad(self.dense, pad_width=(0, pad), mode="constant")
+            self.dense[-pad:, -pad:] = self.diag.scale * np.eye(pad)
+            self.diag.dim -= pad
 
     def tosparse(self):
         """Convert to sparse matrix"""
@@ -255,7 +290,7 @@ class KiteMatrix:
                     diag=self.diag.solve(other.diag),
                 )
 
-            elif dcols_l > drows_r:
+            if dcols_l > drows_r:
                 # since this will be rarely used anyway, simply enlarge dense matrix on the right
                 middle, rest_diag = other.diag.split_blocks(dcols_l - drows_r)
                 return KiteMatrix(
@@ -269,35 +304,38 @@ class KiteMatrix:
                     ),
                     diag=self.diag.solve(rest_diag),
                 )
-            else:  # dcols_l < drows_r:
-                middle, rest_diag = self.diag.split_blocks(drows_r - dcols_l)
-                return KiteMatrix(
-                    dense=np.concatenate(
-                        (
-                            sp.linalg.solve_triangular(
-                                self.dense,
-                                other.dense[0:dcols_l],
-                                lower=self.lower,
-                                trans=trans,
-                                check_finite=check_finite,
-                                overwrite_b=inplace,
-                            ),
-                            middle.solve(other.dense[dcols_l:]),
+            # dcols_l < drows_r:
+            middle, rest_diag = self.diag.split_blocks(drows_r - dcols_l)
+            return KiteMatrix(
+                dense=np.concatenate(
+                    (
+                        sp.linalg.solve_triangular(
+                            self.dense,
+                            other.dense[0:dcols_l],
+                            lower=self.lower,
+                            trans=trans,
+                            check_finite=check_finite,
+                            overwrite_b=inplace,
                         ),
-                        axis=0,
+                        middle.solve(other.dense[dcols_l:]),
                     ),
-                    diag=rest_diag.solve(other.diag),
-                )
+                    axis=0,
+                ),
+                diag=rest_diag.solve(other.diag),
+            )
 
         return np.concatenate(
-            sp.linalg.solve_triangular(
-                self.dense,
-                other[0 : self.dense.shape[1]],
-                lower=self.lower,
-                trans=trans,
-                check_finite=check_finite,
+            (
+                sp.linalg.solve_triangular(
+                    self.dense,
+                    other[0 : self.dense.shape[1]],
+                    lower=self.lower,
+                    trans=trans,
+                    check_finite=check_finite,
+                ),
+                self.diag.solve(other[self.dense.shape[1] :]),
             ),
-            self.diag.solve(other[self.dense.shape[1] :], check_finite=check_finite),
+            axis=0,
         )
 
     def __rmatmul__(self, other):

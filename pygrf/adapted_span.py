@@ -40,17 +40,19 @@ class LazyAdaptedSpan(OrthogonalBasis):
             raise ValueError("Cannot reference basis vectors of the future")
 
         self.ensure_eager(dim)
-        return coeff_2d[:, :dim]@ self._basis_matrix[:dim]
+        result = coeff_2d[:, :dim] @ self._basis_matrix[:dim]
+        if len(coeffs.shape) == 2:
+            return result
+        return result.reshape(-1)
 
     def coeff_from_std_basis(self, row_vecs):
         self.ensure_eager(self._dim_t)
 
         row_vecs_2d = np.atleast_2d(row_vecs)
-        needed_mat_size = self._eager + row_vecs_2d.shape[0]
+        needed_mat_size = min(self._eager + row_vecs_2d.shape[0], self.dim)
         if needed_mat_size > self._basis_matrix.shape[0]:
             self._basis_matrix.resize(
-                needed_mat_size, self._basis_matrix.shape[1],
-                refcheck=False
+                needed_mat_size, self._basis_matrix.shape[1], refcheck=False
             )
 
         coeffs = np.zeros((row_vecs_2d.shape[0], needed_mat_size))
@@ -59,20 +61,22 @@ class LazyAdaptedSpan(OrthogonalBasis):
         for idx, row_vec in enumerate(row_vecs_2d):
             self._coeff_from_vec(row_vec, out=coeffs[idx])
 
-        return coeffs if row_vecs.ndim > 1 else coeffs[0]
+        return (
+            coeffs[:, : self._dim_t] if row_vecs.ndim > 1 else coeffs[0, : self._dim_t]
+        )
 
     def _project(self, row_vecs, up_to_dim):
         """project row vectors onto the first up_to_dim vectors of the basis
 
         return the coefficients and the residuals
         """
-        coeff = row_vecs @ self._basis_matrix[: up_to_dim].T
-        residual = row_vecs - coeff @ self._basis_matrix[: up_to_dim]
+        coeff = row_vecs @ self._basis_matrix[:up_to_dim].T
+        residual = row_vecs - coeff @ self._basis_matrix[:up_to_dim]
         return coeff, residual
 
     def _coeff_from_vec(self, vec, out):
         """Convert a single vector to coefficients with respect to the current basis"""
-        out[:self._dim_t], residual = self._project(vec, up_to_dim=self._dim_t)
+        out[: self._dim_t], residual = self._project(vec, up_to_dim=self._dim_t)
         if np.allclose(residual, 0):  # check if residual is zero
             return out
 
