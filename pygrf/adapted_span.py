@@ -61,15 +61,18 @@ class LazyAdaptedSpan(OrthogonalBasis):
 
         return coeffs if row_vecs.ndim > 1 else coeffs[0]
 
-    def _project_to_current(self, row_vecs):
-        """project a row vector to the currently available basis"""
-        coeff = row_vecs @ self._basis_matrix[: self._dim_t].T
-        residual = row_vecs - coeff @ self._basis_matrix[: self._dim_t]
+    def _project(self, row_vecs, up_to_dim):
+        """project row vectors onto the first up_to_dim vectors of the basis
+
+        return the coefficients and the residuals
+        """
+        coeff = row_vecs @ self._basis_matrix[: up_to_dim].T
+        residual = row_vecs - coeff @ self._basis_matrix[: up_to_dim]
         return coeff, residual
 
     def _coeff_from_vec(self, vec, out):
         """Convert a single vector to coefficients with respect to the current basis"""
-        out[:self._dim_t], residual = self._project_to_current(vec)
+        out[:self._dim_t], residual = self._project(vec, up_to_dim=self._dim_t)
         if np.allclose(residual, 0):  # check if residual is zero
             return out
 
@@ -81,11 +84,13 @@ class LazyAdaptedSpan(OrthogonalBasis):
         self._eager += 1
 
         return out
- 
+
     def add_random_orthogonal(self):
         """Add a random orthogonal vector to the basis"""
-        self._dim_t += 1
-        # lazy, only actually generate vec if needed
+        if self._dim_t < self.dim:
+            self._dim_t += 1
+            # lazy, only actually generate vec if needed
+        return self._dim_t
 
     def ensure_eager(self, needed_basis_len):
         """Ensure that the eagerly calculated part of matrix
@@ -94,12 +99,12 @@ class LazyAdaptedSpan(OrthogonalBasis):
             raise ValueError("Cannot reference basis vectors of the future")
 
         n, dim = self._basis_matrix.shape
-        self._basis_matrix.resize(max(n, needed_basis_len), dim)
+        self._basis_matrix.resize(max(n, needed_basis_len), dim, refcheck=False)
 
         for idx in range(self._eager, needed_basis_len):
             # generate random vector, uniformly distributed on the orthogonal sphere
-            _, residual = self._project_to_current(self.rng.random(dim))
+            _, residual = self._project(self.rng.random(dim), up_to_dim=idx)
             residual /= np.linalg.norm(residual)
-            self._basis_matrix[idx] = self.rng.random(residual)
+            self._basis_matrix[idx] = residual
 
         self._eager = max(self._eager, needed_basis_len)

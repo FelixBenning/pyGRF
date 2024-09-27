@@ -38,6 +38,11 @@ class Basis(abc.ABC):
         """Convert coefficients into standard basis representation """
         return  coeffs @ self._basis_matrix
 
+    @property
+    def dim(self):
+        """ Return the dimension of the vector space """
+        return self._basis_matrix.shape[1]
+
 
 class OrthogonalBasis(Basis):
     """An orthogonal basis whose vectors are orthonormal

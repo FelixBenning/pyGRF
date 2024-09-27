@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from numbers import Number
 from functools import cache
-from shlex import join
 
 import sympy as sym
 import numpy as np
@@ -171,11 +170,15 @@ class StationaryIsotropicKernel(IsotropicKernel):
             return kernel_expression(neg_sq_norm_dist_half)
         super().__init__(isotropic_kernel)
 
-
 class SquaredExponentialKernel(StationaryIsotropicKernel):
     """ Squared Exponential Kernel
 
     k(x,y) = variance * exp(-norm(x-y)**2/(2*length_scale**2))
     """
     def __init__(self, variance=1.0, length_scale=1.0):
+        self._variance = variance
+        self._length_scale = length_scale
         super().__init__(lambda x: variance*sym.exp(x/length_scale**2))
+ 
+    def __repr__(self):
+        return f"SquaredExponentialKernel(variance={self._variance}, length_scale={self._length_scale})"

@@ -3,7 +3,6 @@
 # pylint: disable=redefined-outer-name
 import pytest
 import numpy as np
-import scipy as sp
 
 from pygrf.kernels import SquaredExponentialKernel
 

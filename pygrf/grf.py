@@ -1,13 +1,14 @@
-from enum import auto
 from typing import List
 from numbers import Number
 
 import scipy as sp
 import numpy as np
 
-from .matrices import KiteMatrix, ScaledIdentity
-from .adapted_span import LazyAdaptedSpan
-from .kernels import IsotropicKernel
+from pygrf.basis import CoordinateVec
+
+from pygrf.matrices import KiteMatrix, ScaledIdentity
+from pygrf.adapted_span import LazyAdaptedSpan
+from pygrf.kernels import IsotropicKernel, SquaredExponentialKernel, partial_derivatives
 
 
 class BlockCholesky:
@@ -39,7 +40,7 @@ class BlockCholesky:
 
  
 
-class LinIsotropicGRF:
+class IsotropicGRF:
     """Object which represents a lazily evaluated linear Isotropic Gaussian Random Function"""
 
     __slots__ = (
@@ -53,41 +54,53 @@ class LinIsotropicGRF:
         "_rng",
     )
 
-    def __init__(self, *, mean, kernel: IsotropicKernel, dim, rng=None) -> None:
+    def __init__(self, *, kernel: IsotropicKernel, dim, mean=0, rng=None) -> None:
         if isinstance(rng, Number) or rng is None:
-            self._rng = np.random.default_rng(rng) 
+            self._rng = np.random.default_rng(rng)
         elif isinstance(rng, np.random.Generator):
             self._rng = rng
         else:
             raise ValueError("rng must be a seed number, a numpy random generator or None")
-        
 
         self.dim = dim
-        self.mean = mean
+        if isinstance(mean, Number):
+            self.mean = lambda x: mean
+        else:
+            self.mean = mean
         self.kernel = kernel
-        self._adapted_span = LazyAdaptedSpan()
+        self._adapted_span = LazyAdaptedSpan(dim=dim)
         self._cholesky = BlockCholesky()
-        self._randomness = sp.sparse.lil_array((0, dim))
+        self._randomness = []
         self._coeffs = sp.sparse.lil_array((0, dim))
 
-    def __call__(self, vec):
+    def __call__(self, vec, /, *, with_gradient=False):
         new_coeff = self._adapted_span.into_basis(vec).coeffs
-        c_E, natural_ce = self._conditional_expectation(new_coeff, return_natural_ce=True)
+        cond_exp, natural_ce = self._conditional_expectation(new_coeff, return_natural_ce=True)
 
         c_std = self._conditional_std(new_coeff, natural_ce)
 
-        nn = self._randomness.shape[0]
-        span_len = len(self._adapted_span)
-        self._randomness.resize(nn + 1, self.dim)
-        self._randomness[nn,:span_len] = self._rng.normal(size=span_len)
+        new_randomness = np.empty(min(len(cond_exp)+1, self.dim+1))
+        new_randomness[:len(cond_exp)] = self._rng.normal(size=len(cond_exp))
 
-        # only sample the norm of the component orthogonal to the existing span
-        self._randomness[nn,span_len] = np.sqrt(self._rng.chisquare(df=self.dim-span_len))
-        self._adapted_span.add_random_orthogonal() # lazy new direction
+        if len(cond_exp) < self.dim + 1:
+            # only sample the norm of the component orthogonal to the existing span
+            new_randomness[len(cond_exp)] = np.sqrt(
+                self._rng.chisquare(df=self.dim+1-len(cond_exp))
+            )
+            # lazy new direction
+            self._adapted_span.add_random_orthogonal()
 
-        result = c_E + c_std @ self._randomness[nn]
+            noise_on_cE = c_std.dense @ new_randomness[:len(cond_exp)]
+            new_v_len = c_std.diag.scale * new_randomness[len(cond_exp)]
+            z_result = np.append(cond_exp + noise_on_cE, new_v_len)
+        else:
+            z_result = cond_exp + c_std @ new_randomness
+
 
         # === BOOKKEEPING ===
+        # append randomness
+        self._randomness.append(new_randomness)
+
         # append cholesky
         natural_ce.append(c_std)
         self._cholesky.append_row(natural_ce)
@@ -99,13 +112,31 @@ class LinIsotropicGRF:
 
 
         # === return result ===
-        return result
+        sq_norm_half = np.einsum("i,i->", new_coeff, new_coeff)/2
+        val = self.mean(sq_norm_half) + z_result[0]
+        grad_coeff = (
+            partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
+            + z_result[1:]
+        )
+        gradient = CoordinateVec(
+            basis_ref=self._adapted_span,
+            coeffs=grad_coeff
+        )
+        if with_gradient:
+            return val, gradient
+        return val
 
 
 
     def _conditional_expectation(self, new_coeff, return_natural_ce=False):
+        old_coeffs = self._coeffs[:,:len(self._adapted_span)].toarray()
+        if old_coeffs.shape[0] == 0:
+            result = np.zeros(len(new_coeff)+1)
+            if return_natural_ce:
+                return result, []
+            return result
         mixed_cov, new_dir = self.kernel.covariance(
-            self._coeffs,
+            old_coeffs,
             new_coeff,
             derivatives=1,
             basis=self._adapted_span,
@@ -113,16 +144,17 @@ class LinIsotropicGRF:
         )
         natural_ce = self._cholesky.solve_inplace([
             KiteMatrix(
-                dense= coeff.reshape(coeff.shape[0],coeff.shape[2]),
-                diag= ScaledIdentity(scale, self.dim - coeff.shape[0])
+                dense= block.reshape(block.shape[0],block.shape[2]),
+                diag= ScaledIdentity(scale, self.dim - len(self._adapted_span))
             )
-            for coeff, scale in zip(mixed_cov, new_dir.reshape(-1))
+            for block, scale in zip(mixed_cov, new_dir.reshape(-1))
         ])
 
         result = np.zeros(new_coeff.shape[1])
         for idx, block in enumerate(natural_ce):
             dense = block.dense
-            result[:dense.shape[0]] += dense @ self._randomness[idx,:dense.shape[1]]
+            rand = self._randomness[idx]
+            result[:dense.shape[0]] += dense[:,:len(rand)] @ rand
  
         if return_natural_ce:
             return result, natural_ce
@@ -132,13 +164,22 @@ class LinIsotropicGRF:
         auto_cov, new_dir = self.kernel.covariance(
             new_coeff, new_coeff, derivatives=1, new_dir=True
         )
-        auto_covariance = KiteMatrix(
-            dense= auto_cov.reshape(auto_cov.shape[1], auto_cov.shape[3]),
-            diag= ScaledIdentity(new_dir.item(), self.dim - auto_cov.shape[1])
-        )
+        auto_covariance = auto_cov.reshape(len(new_coeff)+1, len(new_coeff)+1)
+        if self.dim > len(new_coeff):
+            auto_covariance = KiteMatrix(
+                dense= auto_covariance,
+                diag= ScaledIdentity(new_dir.item(), self.dim - len(new_coeff))
+            )
         for block in natural_ce:
             auto_covariance -= block @ block.T
         return auto_covariance.cholesky(overwrite_self=True)
 
     def gradient(self, x):
-        pass
+        """ return the gradient at x """
+        return self(x, with_gradient = True)[1]
+
+if __name__ == "__main__":
+    f = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
+    x0 = np.array([1,2])
+    x1 = x0 - f.gradient(x0)
+    f(x1)
