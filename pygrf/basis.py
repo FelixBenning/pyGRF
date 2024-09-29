@@ -69,8 +69,14 @@ class CoordinateVec:
     __slots__ = "basis", "coeffs"
 
     def __init__(self, basis_ref: Basis, coeffs) -> None:
+        assert coeffs.ndim == 1, "vector should not have more than one dim"
         self.basis = basis_ref
         self.coeffs = coeffs
+
+    @property
+    def ndim(self):
+        """ number of dimensions """
+        return 1
 
     def __array__(self, dtype=None, copy=None):
         if copy is False:

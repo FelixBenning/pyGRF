@@ -157,6 +157,20 @@ class KiteMatrix:
         """Convert to sparse matrix"""
         return sp.sparse.block_array([[self.dense, None], [None, self.diag.tosparse()]])
 
+    def __array__(self, dtype=None, copy=None):
+        return np.block(
+            [
+                [
+                    np.asarray(self.dense, dtype=dtype, copy=copy),
+                    np.zeros((self.dense.shape[0], self.diag.shape[1])),
+                ],
+                [
+                    np.zeros((self.diag.shape[0], self.dense.shape[1])),
+                    np.asarray(self.diag, dtype=dtype, copy=copy),
+                ],
+            ]
+        )
+
     def toarray(self):
         """Convert to dense array"""
         return self.tosparse().toarray()
@@ -211,9 +225,7 @@ class KiteMatrix:
 
         # other is not KiteMatrix, split in blocks and multiply block wise
         n = self.dense.shape[1]
-        return np.concatenate(
-            (self.dense @ other[0:n, :], self.diag @ other[n:, :]), axis=0
-        )
+        return np.concatenate((self.dense @ other[0:n], self.diag @ other[n:]), axis=0)
 
     def cholesky(
         self, lower=True, overwrite_self=False, check_finite=True

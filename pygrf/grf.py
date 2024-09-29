@@ -17,6 +17,19 @@ class BlockCholesky:
     def __init__(self):
         self.data: List[List[KiteMatrix]] = []
 
+    def __array__(self):
+        max_row_len = len(self.data[-1])
+        zero_fill = np.zeros(self.data[-1][-1].shape)
+        return np.block(
+            [
+                [
+                    np.asarray(row[idx]) if idx < len(row) else zero_fill
+                    for idx in range(max_row_len)
+                ]
+                for row in self.data
+            ]
+        )
+
     def solve_inplace(self, mixed_covariance):
         """solve the equation
             self @ x = mixed_covariance for x
@@ -35,9 +48,9 @@ class BlockCholesky:
                     mixed_covariance[idx], inplace=True
                 ).T
             else:
-                mixed_covariance[idx] = sp.linalg.cho_solve(
-                    (lower_block, True), mixed_covariance[idx], overwrite_b=True
-                )
+                mixed_covariance[idx] = sp.linalg.solve_triangular(
+                    lower_block, mixed_covariance[idx], lower=True, overwrite_b=True
+                ).T
 
         return mixed_covariance
 
@@ -57,9 +70,12 @@ class IsotropicGRF:
         "_randomness",
         "_coeffs",
         "_rng",
+        "_noise",
     )
 
-    def __init__(self, *, kernel: IsotropicKernel, dim, mean=0, rng=None) -> None:
+    def __init__(
+        self, *, kernel: IsotropicKernel, dim, mean=0, rng=None, noise=1e-6
+    ) -> None:
         if isinstance(rng, Number) or rng is None:
             self._rng = np.random.default_rng(rng)
         elif isinstance(rng, np.random.Generator):
@@ -79,8 +95,14 @@ class IsotropicGRF:
         self._cholesky = BlockCholesky()
         self._randomness = []
         self._coeffs = sp.sparse.lil_array((0, dim))
+        self._noise = noise
 
     def __call__(self, vec, /, *, with_gradient=False):
+        if vec.ndim > 1:
+            if with_gradient:
+                return [self(x) for x in vec]
+            else:
+                return np.array([self(x) for x in vec])
         new_coeff = self._adapted_span.into_basis(vec).coeffs
         cond_exp, natural_ce = self._conditional_expectation(
             new_coeff, return_natural_ce=True
@@ -176,10 +198,11 @@ class IsotropicGRF:
         )
         coeff_dim = new_coeff_2d.shape[1]
         auto_covariance = auto_cov.reshape(coeff_dim + 1, coeff_dim + 1)
-        if self.dim > new_coeff_2d.shape[1]:
+        auto_covariance += self._noise * np.eye(coeff_dim + 1)
+        if self.dim > coeff_dim:
             auto_covariance = KiteMatrix(
                 dense=auto_covariance,
-                diag=ScaledIdentity(new_dir.item(), self.dim - len(new_coeff_2d)),
+                diag=ScaledIdentity(new_dir.item(), self.dim - coeff_dim),
             )
         for block in natural_ce:
             auto_covariance -= block @ block.T
@@ -199,3 +222,13 @@ if __name__ == "__main__":
     grad = f.gradient(x0)
     x1 = x0 - grad
     f(x1)
+
+    import matplotlib.pyplot as plt
+
+    f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
+    x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
+    y = f1(x)
+
+    plt.plot(x.reshape(-1), y)
+    plt.show()
+    print(y)
