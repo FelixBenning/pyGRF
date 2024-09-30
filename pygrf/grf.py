@@ -217,18 +217,24 @@ class IsotropicGRF:
 
 
 if __name__ == "__main__":
-    f = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
-    x0 = np.array([1, 2])
-    grad = f.gradient(x0)
-    x1 = x0 - grad
-    f(x1)
-
     import matplotlib.pyplot as plt
 
+    # plot tests
+
+    # %% 1D
     f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
     x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
     y = f1(x)
 
     plt.plot(x.reshape(-1), y)
     plt.show()
-    print(y)
+
+    # %% 2D
+    f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
+    X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
+    points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
+    z = np.array([f2(point) for point in points]).reshape(X.shape)
+    plt.contour(X,Y, z)
+    plt.show()
+
+# %%
