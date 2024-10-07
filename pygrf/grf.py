@@ -97,6 +97,10 @@ class IsotropicGRF:
         self._coeffs = sp.sparse.lil_array((0, dim))
         self._noise = noise
 
+    def into_adapted_span(self, vec):
+        """ convert vec into a Coordinate Vector of the adapted span"""
+        return self._adapted_span.into_basis(vec)
+
     def __call__(self, vec, /, *, with_gradient=False):
         if vec.ndim > 1:
             if with_gradient:
@@ -237,4 +241,20 @@ if __name__ == "__main__":
     plt.contour(X,Y, z)
     plt.show()
 
-# %%
+    # %% 10D Gradient Descent
+
+    f10 = IsotropicGRF(dim=10, kernel=SquaredExponentialKernel())
+    x0 = np.random.rand(10)
+    x0 = f10.into_adapted_span(x0)
+    X = [x0]
+    Y = []
+    for _ in range(20):
+        x = X[-1]
+        f, g = f10(x, with_gradient=True)
+        Y.append(f)
+        X.append(x - g)
+    
+    plt.plot(X[:-1], Y)
+    plt.show()
+
+    # %% 100D Gradient Descent
