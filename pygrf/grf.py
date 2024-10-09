@@ -115,12 +115,16 @@ class IsotropicGRF:
         c_std = self._conditional_std(new_coeff, natural_ce)
 
         new_randomness = np.empty(min(len(cond_exp) + 1, self.dim + 1))
-        new_randomness[: len(cond_exp)] = self._rng.normal(size=len(cond_exp))
+        new_randomness[: len(cond_exp)] = self._rng.normal(
+            size=len(cond_exp),
+            scale=1/np.sqrt(self.dim)
+        )
 
         if len(cond_exp) < self.dim + 1:
             # only sample the norm of the component orthogonal to the existing span
+            df = self.dim + 1 - len(cond_exp) # remaining dimensions
             new_randomness[len(cond_exp)] = np.sqrt(
-                self._rng.chisquare(df=self.dim + 1 - len(cond_exp))
+                self._rng.gamma(shape=df/2, scale=2/self.dim)
             )
             # lazy new direction
             self._adapted_span.add_random_orthogonal()
