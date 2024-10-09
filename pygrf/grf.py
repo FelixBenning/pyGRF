@@ -145,13 +145,17 @@ class IsotropicGRF:
         self._coeffs[dd, : len(new_coeff)] = new_coeff
 
         # === return result ===
+        ## VALUE
         sq_norm_half = np.einsum("i,i->", new_coeff, new_coeff) / 2
-        val = self.mean(sq_norm_half) + z_result[0]
-        grad_coeff = (
-            partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
-            + z_result[1:]
-        )
+        val = self.mean(sq_norm_half) + z_result[0] # the first entry is the val
+
+        ## GRADIENT
+        grad_coeff = z_result[1:] # the remaining entries are the gradient
+        # since the coordinate vector might have fewer entries as one new direction is added
+        # add mean with len range
+        grad_coeff[:len(new_coeff)] = partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
         gradient = CoordinateVec(basis_ref=self._adapted_span, coeffs=grad_coeff)
+
         if with_gradient:
             return val, gradient
         return val
@@ -171,7 +175,7 @@ class IsotropicGRF:
             basis=self._adapted_span,
             new_dir=True,
         )
-        if residual_dim := self.dim - len(self._adapted_span) > 0:
+        if (residual_dim := self.dim - len(self._adapted_span)) > 0:
             mixed_covariance = [
                 KiteMatrix(
                     dense=block.reshape(block.shape[0], block.shape[2]),
@@ -225,36 +229,37 @@ if __name__ == "__main__":
 
     # plot tests
 
-    # %% 1D
-    f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
-    x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
-    y = f1(x)
+    # # %% 1D
+    # f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
+    # x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
+    # y = f1(x)
 
-    plt.plot(x.reshape(-1), y)
-    plt.show()
+    # plt.plot(x.reshape(-1), y)
+    # plt.show()
 
-    # %% 2D
-    f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
-    X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
-    points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
-    z = np.array([f2(point) for point in points]).reshape(X.shape)
-    plt.contour(X,Y, z)
-    plt.show()
+    # # %% 2D
+    # f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
+    # X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
+    # points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
+    # z = np.array([f2(point) for point in points]).reshape(X.shape)
+    # plt.contour(X,Y, z)
+    # plt.show()
 
     # %% 10D Gradient Descent
 
-    f10 = IsotropicGRF(dim=10, kernel=SquaredExponentialKernel())
-    x0 = np.random.rand(10)
+    f10 = IsotropicGRF(dim=100, kernel=SquaredExponentialKernel())
+    x0 = np.random.rand(100)
     x0 = f10.into_adapted_span(x0)
     X = [x0]
     Y = []
-    for _ in range(20):
+    ts = range(20)
+    for _ in ts:
         x = X[-1]
         f, g = f10(x, with_gradient=True)
         Y.append(f)
         X.append(x - g)
     
-    plt.plot(X[:-1], Y)
+    plt.plot(ts, Y)
     plt.show()
 
     # %% 100D Gradient Descent

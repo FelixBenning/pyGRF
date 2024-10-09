@@ -89,9 +89,18 @@ class CoordinateVec:
         return self.basis.coeff_into_std_basis(self.coeffs)
 
     def __add__(self, other):
+        other_coeffs = self.basis.into_basis(other).coeffs
+
+        if len(other_coeffs) > len(self.coeffs):
+            coeffs = np.zeros_like(other_coeffs)
+            coeffs[:len(self.coeffs)] = self.coeffs
+        else:
+            coeffs = self.coeffs.copy()
+
+        coeffs[:len(other_coeffs)] += other_coeffs
         return CoordinateVec(
             basis_ref=self.basis,
-            coeffs=self.coeffs + self.basis.into_basis(other).coeffs,
+            coeffs=coeffs,
         )
 
     def __radd__(self, other):
@@ -107,10 +116,38 @@ class CoordinateVec:
         return self * other
 
     def __sub__(self, other):
+        other_coeffs = self.basis.into_basis(other).coeffs
+
+        if len(other_coeffs) > len(self.coeffs):
+            coeffs = np.zeros_like(other_coeffs)
+            coeffs[:len(self.coeffs)] = self.coeffs
+        else:
+            coeffs = self.coeffs.copy()
+
+        coeffs[:len(other_coeffs)] -= other_coeffs
+
         return CoordinateVec(
             basis_ref=self.basis,
-            coeffs=self.coeffs - self.basis.into_basis(other).coeffs,
+            coeffs=coeffs,
         )
 
     def __rsub__(self, other):
         return other - self.in_std_basis()
+
+    def __iadd__(self, other):
+        other_coeffs = self.basis.into_basis(other).coeffs
+        if len(other_coeffs) > len(self.coeffs):
+            coeffs = self.coeffs
+            self.coeffs = np.zeros(len(other_coeffs))
+            self.coeffs[:len(coeffs)] = coeffs
+        self.coeffs[:len(other_coeffs)] += other_coeffs
+        return self
+
+    def __isub__(self, other):
+        other_coeffs = self.basis.into_basis(other).coeffs
+        if len(other_coeffs) > len(self.coeffs):
+            coeffs = self.coeffs
+            self.coeffs = np.zeros_like(other_coeffs)
+            self.coeffs[:len(coeffs)] = coeffs
+        self.coeffs[:len(other_coeffs)] -= other_coeffs
+        return self
