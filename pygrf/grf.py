@@ -233,26 +233,26 @@ if __name__ == "__main__":
 
     # plot tests
 
-    # # %% 1D
-    # f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
-    # x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
-    # y = f1(x)
+    # %% 1D
+    f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
+    x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
+    y = f1(x)
 
-    # plt.plot(x.reshape(-1), y)
-    # plt.show()
+    plt.plot(x.reshape(-1), y)
+    plt.show()
 
-    # # %% 2D
-    # f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
-    # X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
-    # points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
-    # z = np.array([f2(point) for point in points]).reshape(X.shape)
-    # plt.contour(X,Y, z)
-    # plt.show()
+    # %% 2D
+    f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
+    X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
+    points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
+    z = np.array([f2(point) for point in points]).reshape(X.shape)
+    plt.contour(X,Y, z)
+    plt.show()
 
     # %% 10D Gradient Descent
-
-    f10 = IsotropicGRF(dim=100, kernel=SquaredExponentialKernel())
-    x0 = np.random.rand(100)
+    dim= 100
+    f10 = IsotropicGRF(dim=dim, kernel=SquaredExponentialKernel())
+    x0 = np.random.rand(dim)
     x0 = f10.into_adapted_span(x0)
     X = [x0]
     Y = []
