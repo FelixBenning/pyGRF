@@ -1,4 +1,4 @@
-""" Linar algebra module for basis and coordinate vectors """
+"""Linar algebra module for basis and coordinate vectors"""
 
 from numbers import Number
 import abc
@@ -26,7 +26,7 @@ class Basis(abc.ABC):
         else:
             _vec = vec
 
-        return CoordinateVec(basis_ref=self, coeffs=self.coeff_from_std_basis(_vec))
+        return CoordinateVec(self.coeff_from_std_basis(_vec), basis_ref=self)
 
     def coeff_from_std_basis(self, row_vecs):
         """Convert standard basis representation into rows of coefficients"""
@@ -66,17 +66,22 @@ class StandardBasis(OrthogonalBasis):
 class CoordinateVec:
     """A coordinate vector with respect to a basis"""
 
-    __slots__ = "basis", "coeffs"
+    __slots__ = "coeffs", "basis"
 
-    def __init__(self, basis_ref: Basis, coeffs) -> None:
+    def __init__(self, coeffs, /, *, basis_ref: Basis = None) -> None:
         assert coeffs.ndim == 1, "vector should not have more than one dim"
+        if basis_ref is None:
+            basis_ref = StandardBasis(len(coeffs))
         self.basis = basis_ref
         self.coeffs = coeffs
 
     @property
     def ndim(self):
-        """ number of dimensions """
+        """number of dimensions"""
         return 1
+
+    def __repr__(self):
+        return f"CoordinateVec({self.coeffs}, basis={self.basis})"
 
     def __array__(self, dtype=None, copy=None):
         if copy is False:
@@ -93,22 +98,19 @@ class CoordinateVec:
 
         if len(other_coeffs) > len(self.coeffs):
             coeffs = np.zeros_like(other_coeffs)
-            coeffs[:len(self.coeffs)] = self.coeffs
+            coeffs[: len(self.coeffs)] = self.coeffs
         else:
             coeffs = self.coeffs.copy()
 
-        coeffs[:len(other_coeffs)] += other_coeffs
-        return CoordinateVec(
-            basis_ref=self.basis,
-            coeffs=coeffs,
-        )
+        coeffs[: len(other_coeffs)] += other_coeffs
+        return CoordinateVec(coeffs, basis_ref=self.basis)
 
     def __radd__(self, other):
         return other + self.in_std_basis()
 
     def __mul__(self, other):
         if isinstance(other, Number):
-            return CoordinateVec(self.basis, other * self.coeffs)
+            return CoordinateVec(other * self.coeffs, basis_ref=self.basis)
 
         return NotImplemented
 
@@ -120,16 +122,13 @@ class CoordinateVec:
 
         if len(other_coeffs) > len(self.coeffs):
             coeffs = np.zeros_like(other_coeffs)
-            coeffs[:len(self.coeffs)] = self.coeffs
+            coeffs[: len(self.coeffs)] = self.coeffs
         else:
             coeffs = self.coeffs.copy()
 
-        coeffs[:len(other_coeffs)] -= other_coeffs
+        coeffs[: len(other_coeffs)] -= other_coeffs
 
-        return CoordinateVec(
-            basis_ref=self.basis,
-            coeffs=coeffs,
-        )
+        return CoordinateVec(coeffs, basis_ref=self.basis)
 
     def __rsub__(self, other):
         return other - self.in_std_basis()
@@ -139,8 +138,8 @@ class CoordinateVec:
         if len(other_coeffs) > len(self.coeffs):
             coeffs = self.coeffs
             self.coeffs = np.zeros(len(other_coeffs))
-            self.coeffs[:len(coeffs)] = coeffs
-        self.coeffs[:len(other_coeffs)] += other_coeffs
+            self.coeffs[: len(coeffs)] = coeffs
+        self.coeffs[: len(other_coeffs)] += other_coeffs
         return self
 
     def __isub__(self, other):
@@ -148,6 +147,6 @@ class CoordinateVec:
         if len(other_coeffs) > len(self.coeffs):
             coeffs = self.coeffs
             self.coeffs = np.zeros_like(other_coeffs)
-            self.coeffs[:len(coeffs)] = coeffs
-        self.coeffs[:len(other_coeffs)] -= other_coeffs
+            self.coeffs[: len(coeffs)] = coeffs
+        self.coeffs[: len(other_coeffs)] -= other_coeffs
         return self

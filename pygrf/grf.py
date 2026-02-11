@@ -162,7 +162,7 @@ class IsotropicGRF:
         grad_coeff[: len(new_coeff)] += (
             partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
         )
-        gradient = CoordinateVec(basis_ref=self._adapted_span, coeffs=grad_coeff)
+        gradient = CoordinateVec(grad_coeff, basis_ref=self._adapted_span)
 
         if with_gradient:
             return val, gradient
