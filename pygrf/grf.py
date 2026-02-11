@@ -8,7 +8,7 @@ from pygrf.basis import CoordinateVec
 
 from pygrf.matrices import KiteMatrix, ScaledIdentity
 from pygrf.adapted_span import LazyAdaptedSpan
-from pygrf.kernels import IsotropicKernel, SquaredExponentialKernel, partial_derivatives
+from pygrf.kernels import IsotropicKernel, partial_derivatives
 
 
 class BlockCholesky:
@@ -59,7 +59,10 @@ class BlockCholesky:
 
 
 class IsotropicGRF:
-    """Object which represents a lazily evaluated linear Isotropic Gaussian Random Function"""
+    """
+    Object which represents a lazily evaluated
+    Isotropic Gaussian Random Function
+    """
 
     __slots__ = (
         "mean",
@@ -98,7 +101,7 @@ class IsotropicGRF:
         self._noise = noise
 
     def into_adapted_span(self, vec):
-        """ convert vec into a Coordinate Vector of the adapted span"""
+        """convert vec into a Coordinate Vector of the adapted span"""
         return self._adapted_span.into_basis(vec)
 
     def __call__(self, vec, /, *, with_gradient=False):
@@ -116,15 +119,14 @@ class IsotropicGRF:
 
         new_randomness = np.empty(min(len(cond_exp) + 1, self.dim + 1))
         new_randomness[: len(cond_exp)] = self._rng.normal(
-            size=len(cond_exp),
-            scale=1/np.sqrt(self.dim)
+            size=len(cond_exp), scale=1 / np.sqrt(self.dim)
         )
 
         if len(cond_exp) < self.dim + 1:
             # only sample the norm of the component orthogonal to the existing span
-            df = self.dim + 1 - len(cond_exp) # remaining dimensions
+            df = self.dim + 1 - len(cond_exp)  # remaining dimensions
             new_randomness[len(cond_exp)] = np.sqrt(
-                self._rng.gamma(shape=df/2, scale=2/self.dim)
+                self._rng.gamma(shape=df / 2, scale=2 / self.dim)
             )
             # lazy new direction
             self._adapted_span.add_random_orthogonal()
@@ -149,15 +151,17 @@ class IsotropicGRF:
         self._coeffs[dd, : len(new_coeff)] = new_coeff
 
         # === return result ===
-        ## VALUE
+        # VALUE
         sq_norm_half = np.einsum("i,i->", new_coeff, new_coeff) / 2
-        val = self.mean(sq_norm_half) + z_result[0] # the first entry is the val
+        val = self.mean(sq_norm_half) + z_result[0]  # the first entry is the val
 
-        ## GRADIENT
-        grad_coeff = z_result[1:] # the remaining entries are the gradient
+        # GRADIENT
+        grad_coeff = z_result[1:]  # the remaining entries are the gradient
         # since the coordinate vector might have fewer entries as one new direction is added
         # add mean with len range
-        grad_coeff[:len(new_coeff)] = partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
+        grad_coeff[: len(new_coeff)] += (
+            partial_derivatives(self.mean, 1, dim=1)(sq_norm_half) * new_coeff
+        )
         gradient = CoordinateVec(basis_ref=self._adapted_span, coeffs=grad_coeff)
 
         if with_gradient:
@@ -226,44 +230,3 @@ class IsotropicGRF:
     def gradient(self, x):
         """return the gradient at x"""
         return self(x, with_gradient=True)[1]
-
-
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    # plot tests
-
-    # %% 1D
-    f1 = IsotropicGRF(dim=1, kernel=SquaredExponentialKernel())
-    x = np.arange(start=0, stop=10, step=0.1).reshape((-1, 1))
-    y = f1(x)
-
-    plt.plot(x.reshape(-1), y)
-    plt.show()
-
-    # %% 2D
-    f2 = IsotropicGRF(dim=2, kernel=SquaredExponentialKernel())
-    X,Y = np.mgrid[-5:5:0.4, -5:5:0.4]
-    points = [np.array([x,y]) for x,y in zip(X.flatten(),Y.flatten())]
-    z = np.array([f2(point) for point in points]).reshape(X.shape)
-    plt.contour(X,Y, z)
-    plt.show()
-
-    # %% 10D Gradient Descent
-    dim= 100
-    f10 = IsotropicGRF(dim=dim, kernel=SquaredExponentialKernel())
-    x0 = np.random.rand(dim)
-    x0 = f10.into_adapted_span(x0)
-    X = [x0]
-    Y = []
-    ts = range(20)
-    for _ in ts:
-        x = X[-1]
-        f, g = f10(x, with_gradient=True)
-        Y.append(f)
-        X.append(x - g)
-    
-    plt.plot(ts, Y)
-    plt.show()
-
-    # %% 100D Gradient Descent

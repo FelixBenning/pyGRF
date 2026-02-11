@@ -75,7 +75,10 @@ class LazyAdaptedSpan(OrthogonalBasis):
         return coeff, residual
 
     def _coeff_from_vec(self, vec, out):
-        """Convert a single vector to coefficients with respect to the current basis"""
+        """Convert a single vector to coefficients with respect to the current basis.
+           If the vec is not already in the span, add its orthogonal component
+           to the basis.
+        """
         out[: self._dim_t], residual = self._project(vec, up_to_dim=self._dim_t)
         if np.allclose(residual, 0):  # check if residual is zero
             return out

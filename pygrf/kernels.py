@@ -17,7 +17,7 @@ def partial_derivatives(func, indices, dim=3, index_start=1):
         dim = 3
         return ∂1 ∂2 ∂2 func(t_1, t_2, t_3)
     """
-    print(f"cache miss: partial_derivatives({func}, {indices}, {dim})")  # logging
+    # print(f"cache miss: partial_derivatives({func}, {indices}, {dim})")  # logging
     if isinstance(indices, tuple):
         _key = indices
     elif isinstance(indices, Number):
