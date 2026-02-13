@@ -139,38 +139,61 @@ def ensure_simulations(
     return df
 
 
-# Use the cache context manager and ensure simulations exist for dims
 def plot_gd_trajectory(
     ax,
     cache: "SimulationCache",
     dim: int,
     repeats: int,
     steps: int,
-    learning_rate: float = 1.0,
+    learning_rate: float | list = 1.0,
 ):
     """Ensure simulations for `dim` and draw trajectories + mean/std on `ax`.
 
-    Returns the final values array for this dimension (shape: (n_repeats,)).
+    `learning_rate` can be a float or list of floats. Returns a dict mapping
+    learning rates to final values arrays, or a single array if learning_rate is float.
     """
-    cache.df = ensure_simulations(cache.df, dim, repeats, steps, learning_rate)
-    subset = cache.df.filter(pl.col("dim") == dim).sort("seed")
-    f_vals = np.stack(subset["f_vals"].to_list())
-
-    ax.set_title(f"GD trajectory (dim={dim})")
-    for repeat in range(f_vals.shape[0]):
-        ax.plot(range(steps), f_vals[repeat, :steps], color="C0", linewidth=0.4)
-    mean_vals = f_vals[:, :steps].mean(axis=0)
-    std_vals = f_vals[:, :steps].std(axis=0)
-    ax.plot(range(steps), mean_vals, color="C1", linewidth=1.5)
-    ax.fill_between(
-        range(steps),
-        mean_vals - 2 * std_vals,
-        mean_vals + 2 * std_vals,
-        color="C1",
-        alpha=0.5,
+    # Normalize learning_rate to a list
+    lr_list = (
+        learning_rate if isinstance(learning_rate, (list, tuple)) else [learning_rate]
     )
+    # lr_list.sort()
+    results = {}
 
-    return f_vals[:, -1]
+    for idx, lr in enumerate(lr_list):
+        cache.df = ensure_simulations(cache.df, dim, repeats, steps, lr)
+        subset = cache.df.filter(pl.col("dim") == dim, pl.col("lr") == lr).sort("seed")
+        f_vals_list = [arr[:steps] for arr in subset["f_vals"].to_list()]
+        f_vals = np.stack(f_vals_list)
+
+        ax.set_title(f"GD trajectory (dim={dim})")
+        for repeat in range(repeats):
+            ax.plot(
+                range(steps),
+                f_vals[repeat, :steps],
+                color=f"C{idx}",
+                linewidth=0.4,
+                alpha=0.3,
+            )
+        mean_vals = f_vals[:, :steps].mean(axis=0)
+        std_vals = f_vals[:, :steps].std(axis=0)
+        ax.plot(
+            range(steps), mean_vals, linewidth=1.5, color=f"C{idx}", label=f"lr={lr}"
+        )
+        ax.fill_between(
+            range(steps),
+            mean_vals - 2 * std_vals,
+            mean_vals + 2 * std_vals,
+            color=f"C{idx}",
+            alpha=0.3,
+        )
+        results[lr] = f_vals[:, -1]
+
+    ax.set_xlabel("step")
+    ax.set_ylabel("function value")
+    ax.legend()
+
+    # Return single array if input was float, otherwise return dict
+    return results[lr_list[0]] if isinstance(learning_rate, (int, float)) else results
 
 
 def boxplot_final_values(
@@ -189,8 +212,11 @@ def boxplot_final_values(
     final_values = []
     for dim in dims_list:
         cache.df = ensure_simulations(cache.df, dim, repeats, steps, learning_rate)
-        subset = cache.df.filter(pl.col("dim") == dim).sort("seed")
-        f_vals = np.stack(subset["f_vals"].to_list())
+        subset = cache.df.filter(
+            pl.col("dim") == dim, pl.col("lr") == learning_rate
+        ).sort("seed")
+        f_vals_list = [arr[:steps] for arr in subset["f_vals"].to_list()]
+        f_vals = np.stack(f_vals_list)
         final_values.append(f_vals[:, steps - 1])
 
     ax.boxplot(
@@ -202,33 +228,54 @@ def boxplot_final_values(
     ax.set_xlabel("dimension")
     ax.set_ylabel("function value")
     ax.set_xscale("log")
-    ax.set_title(f"Distribution of values at step={steps}")
+    ax.set_title(f"Distribution GD(lr={learning_rate}) at step={steps}")
     return final_values
 
 
-def plot_final_std(
+def plot_fun_val_std(
     ax,
     cache: "SimulationCache",
     dims_list,
     repeats: int,
-    steps: int,
+    steps,
     learning_rate: float = 1.0,
 ):
     """Plot the standard deviation of final values for each dimension on a log-log plot.
 
-    Returns the array of std values.
+    `steps` can be an int or a list of ints. If a list, plots curves for each step
+    value. Returns a dict mapping step values to std arrays, or a single array if
+    steps is an int.
     """
-    stds = []
-    for dim in dims_list:
-        cache.df = ensure_simulations(cache.df, dim, repeats, steps, learning_rate)
-        subset = cache.df.filter(pl.col("dim") == dim).sort("seed")
-        f_vals = np.stack(subset["f_vals"].to_list())
-        stds.append(np.std(f_vals[:, steps - 1]))
+    # Normalize steps to a list
+    steps_list = steps if isinstance(steps, (list, tuple)) else [steps]
+    results = {}
 
-    ax.loglog(dims_list, stds, marker="o", color="C2", linewidth=1.5)
+    for step_count in steps_list:
+        stds = []
+        for dim in dims_list:
+            cache.df = ensure_simulations(
+                cache.df, dim, repeats, step_count, learning_rate
+            )
+            subset = cache.df.filter(
+                pl.col("dim") == dim, pl.col("lr") == learning_rate
+            ).sort("seed")
+            f_vals_list = [arr[:step_count] for arr in subset["f_vals"].to_list()]
+            f_vals = np.stack(f_vals_list)
+            stds.append(np.std(f_vals[:, step_count - 1]))
+
+        results[step_count] = np.array(stds)
+        ax.loglog(
+            dims_list,
+            stds,
+            marker="o",
+            linewidth=1.0,
+            label=f"at step={step_count}",
+        )
+
     ax.set_xlabel("dimension")
-    ax.set_ylabel("STD of function values")
-    ax.set_title(f"Standard deviation at step={steps} (log-log)")
+    ax.set_ylabel("Standard deviation")
+    ax.set_title(f"Standard deviation of GD(lr={learning_rate}) (log-log)")
+
     # theoretical 1/sqrt(dim) curve for comparison
     dims_arr = np.array(dims_list, dtype=float)
     theo = 1.0 / np.sqrt(dims_arr)
@@ -241,7 +288,9 @@ def plot_final_std(
         label=r"$\frac{1}{\sqrt{\mathrm{dim}}}$",
     )
     ax.legend()
-    return np.array(stds)
+
+    # Return single array if input was int, otherwise return dict
+    return results[steps_list[0]] if isinstance(steps, int) else results
 
 
 def plot_gd_overview(repeats=100, steps=20, learning_rate: float = 1.0):
@@ -259,18 +308,26 @@ def plot_gd_overview(repeats=100, steps=20, learning_rate: float = 1.0):
             [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000],
             repeats,
             steps,
-            learning_rate,
+            (
+                learning_rate[0]
+                if isinstance(learning_rate, (list, tuple))
+                else learning_rate
+            ),
         )
 
         # plot std of final values on the last subplot (axes[5])
         std_ax = axes[5]
-        plot_final_std(
+        plot_fun_val_std(
             std_ax,
             cache,
-            [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000, 1_000_000],
+            [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000],
             repeats,
-            steps,
-            learning_rate,
+            [steps // idx for idx in range(1, 5)],
+            (
+                learning_rate[0]
+                if isinstance(learning_rate, (list, tuple))
+                else learning_rate
+            ),
         )
 
         plt.tight_layout()
@@ -299,7 +356,7 @@ def dim_2_grf_plot():
 
 
 if __name__ == "__main__":
-    plot_gd_overview(repeats=100, steps=20, learning_rate=0.9)
+    plot_gd_overview(repeats=100, steps=30, learning_rate=[0.5, 1.0, 1.5])
     # dim_1_grf_plot()
     # dim_2_grf_plot()
     # simulate_gd(dim=1, steps=20)
