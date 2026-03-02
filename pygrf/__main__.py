@@ -293,7 +293,9 @@ def plot_fun_val_std(
     return results[steps_list[0]] if isinstance(steps, int) else results
 
 
-def plot_gd_overview(repeats=100, steps=20, learning_rate: float = 1.0):
+def plot_gd_overview(
+    repeats=100, steps=20, learning_rate: float = 1.0, save_path: str | None = None
+):
     fig, axes = plt.subplots(2, 3, figsize=(12, 6))
     with SimulationCache("gd_simulations.parquet") as cache:
         axes = axes.flatten()
@@ -331,7 +333,11 @@ def plot_gd_overview(repeats=100, steps=20, learning_rate: float = 1.0):
         )
 
         plt.tight_layout()
-        plt.show()
+        # If a save path is provided, save the figure instead of showing it.
+        if save_path:
+            fig.savefig(save_path, bbox_inches='tight')
+        else:
+            plt.show()
     return fig
 
 
@@ -356,7 +362,7 @@ def dim_2_grf_plot():
 
 
 if __name__ == "__main__":
-    plot_gd_overview(repeats=100, steps=30, learning_rate=[0.5, 1.0, 1.5])
+    plot_gd_overview(repeats=100, steps=30, learning_rate=[0.5, 1.0, 1.5], save_path="gd_overview.pdf")
     # dim_1_grf_plot()
     # dim_2_grf_plot()
     # simulate_gd(dim=1, steps=20)

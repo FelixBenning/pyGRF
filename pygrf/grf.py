@@ -224,6 +224,7 @@ class IsotropicGRF:
             auto_covariance -= block @ block.T
 
         if isinstance(auto_covariance, KiteMatrix):
+            # TODO: use a more stable decomposition
             return auto_covariance.cholesky(overwrite_self=True, lower=True)
         return sp.linalg.cholesky(auto_covariance, overwrite_a=True, lower=True)
 

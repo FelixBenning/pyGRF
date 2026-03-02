@@ -1,4 +1,4 @@
-""" Implement special matrices """
+"""Implement special matrices"""
 
 from numbers import Number
 import numpy as np
@@ -251,6 +251,17 @@ class KiteMatrix:
             diag=self.diag.cholesky(),
             lower=lower,
         )
+
+    def standard_deviation_mat(
+        self, overwrite_self=False, check_finite=True
+    ) -> "KiteMatrix":
+        """Returns a matrix R such that Cov(R @ Y) == self for Y ~ N(0, I),
+        assuming self is positive semi-definite."""
+        u, s, _ = linalg.svd(
+            self.dense, check_finite=check_finite, overwrite_a=overwrite_self
+        )
+        s_sqrt = np.sqrt(s)
+        return KiteMatrix(dense=(u * s_sqrt), diag=self.diag.cholesky(), lower=None)
 
     def cho_factor(self, lower=True, overwrite_self=False, check_finite=True):
         """Cholesky decomposition
