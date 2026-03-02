@@ -1,11 +1,35 @@
-\section{Conditional Gaussian distributions}
+\subsection{Conditional Gaussian distributions/incremental simulation}
 \label{sec: conditional gaussian distribution}
+
+A Gaussian random function \(\rf\) has the property that for any finite
+set of evaluation points \(x_1, \dots, x_n\) we have that
+\[
+    \rf(x_1), \dots, \rf(x_n)
+\]
+is a multivariate Gaussian random vector with mean
+\[
+    \mu(x_1), \dots, \mu(x_n)
+\]
+and covariance
+\[
+    \Sigma = \begin{pmatrix}
+        \C(x_1, x_1) & \cdots & \C(x_1, x_n)
+        \\
+        \vdots & & \vdots
+        \\
+        \C(x_n, x_1) & \cdots & \C(x_n, x_n)
+    \end{pmatrix}
+\]
+\(\mu\) is a ``mean function'' and \(\C\) a ``covariance function''.
+To simulate \(\rf\) we essentially allow the user to evaluate this incrementally.
+If the user has already requested the values \(\rf(x_1), \dots, \rf(x_n)\)
+and then requests \(\rf(x_{n+1})\), then it is necessary to simulate
+\(\rf(x_{n+1})\) \textbf{conditional on} \(\rf(x_1), \dots, \rf(x_n)\).
 
 Theorem~\ref{thm: conditional gaussian distribution} about conditional Gaussian
 distributions is well known
-\citep[e.g.][Prop.~3.13.]{eatonMultivariateStatisticsVector2007}, but for your
-convenience we wrote down our favorite proof of this theorem capturing
-the intuition behind the statement.
+\citep[e.g.][Prop.~3.13.]{eatonMultivariateStatisticsVector2007}. But in the
+proof we will see the relation to the cholesky decomposition.
 
 \begin{theorem}[Conditional Gaussian distribution]
     \label{thm: conditional gaussian distribution}
@@ -71,7 +95,7 @@ the intuition behind the statement.
         = LY
     \]
     with independent standard normal \(Y_i\), i.e. \(Y\sim\normal(0, \identity)\).
-    \(L_{11}\) is invertible since \(\Sigma_{11}\) and therefore the map from
+    \(L_{11}\) is invertible since \(\Sigma_{11}\) is invertible and therefore the map from
     \(Y_1\) to \(X_1\) is bijective. Conditioning on \(X_1\) is therefore
     equivalent to conditioning on \(Y_1\). But we have
     \begin{equation}
@@ -120,3 +144,94 @@ the intuition behind the statement.
         &= \Sigma_{22} - \underbrace{L_{21}(L_{11}^T}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{21}}\underbrace{L_{11}^{-T}) (L_{11}^{-1}}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{11}^{-1}}\underbrace{L_{11})L_{21}^T}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{12}}.
     \end{align*}
 \end{proof}
+
+\textcolor{red}{Takeaways from the proof:} For conditioning, the cholesky decomposition
+is quite natural and the expressions for the conditional expectation and conditional
+covariance are shorter using the Cholesky decomposition \(L\) than using the covariance
+matrix \(\Sigma\).
+
+\begin{enumerate}
+    \item \(L_{21}\) is sort of the ``natural conditional expectation'' (see \texttt{natural\_ce} in the code)
+    \item \(L_{22}\) is essentially the ``residual standard deviation''
+    that remains after you subtract the explained variance \(L_{21}L_{21}^\transpose\)
+    from the unconditional variance \(\Sigma_{22}\) resulting in the conditional
+    variance
+    \[
+        \Sigma_{2\mid 1} = L_{22}L_{22}^\transpose = \underbrace{\Sigma_{22}}_{\text{unconditial variance}} - \underbrace{L_{21}L_{21}^\transpose}_{\text{explained variance}}.
+    \]
+
+    \item Observe for the above to work we do not need \(L_{11}\) and \(L_{22}\)
+    to be triangular. We only need the upper right corner of \(L\) to be zero.
+    For the calculation of \(L_{22}\) from \(\Sigma_{22}\) and \(L_{21}\)
+    we can therefore use a more stable algorithm than Cholesky!
+    \textcolor{red}{This is not yet implemented, at the moment I am only using
+    cholesky in the code. But this would potentially make the algorithm much
+    more stable.}
+\end{enumerate}
+
+\subsection{Incremental simulation IS the cholesky decomposition}
+
+Another key point here is that the cholesky decomposition is implemented
+exactly like this:
+
+Assuming we already have the decomposition of \(\Sigma_{11}\)
+as \(\Sigma_{11} = L_{11}L_{11}^\transpose\), then we can obtain
+the cholesky decomposition \(L\) of
+\[
+    \Sigma = \begin{bmatrix}
+        \Sigma_{11} & \Sigma_{12}
+        \\
+        \Sigma_{21} & \Sigma_{22}
+    \end{bmatrix}
+    = L L^\transpose
+    = \begin{bmatrix}
+        L_{11} & 0
+        \\
+        L_{21} & L_{22}
+    \end{bmatrix}
+    \begin{bmatrix}
+        L_{11}^\transpose & L_{21}^\transpose
+        \\
+        0 & L_{22}^\transpose
+    \end{bmatrix}
+    = \begin{bmatrix}
+        L_{11}L_{11}^\transpose & L_{11}L_{21}^\transpose
+        \\
+        L_{11}^\transpose L_{21} & L_{22}L_{22}^\transpose + L_{21}L_{21}^\transpose
+    \end{bmatrix}
+\]
+by calculating
+\[
+    L_{21} = (L_{11}^{-1}\Sigma_{21})^{-1}
+\]
+and finally,
+\[
+    L_{22} = \sqrt{\Sigma_{22} - L_{21}L_{21}^\transpose}.
+\]
+The square root above is a normal square root if we only add a single row
+and \(\Sigma_{22}\) is therefore a \(1\times 1\) matrix.
+This is precisely how the Cholesky-Banachiewicz
+algorithm for calculating the cholesky decomposition is defined.
+You start with \(1\times 1\) matrix and then add a single row in every
+iteration.
+
+So if we incrementially simulate \(\rf(x_1), \dots, \rf(x_n)\)
+we pay the exact same price as simulating this vector all at once, because
+if we simulate it all at once we have to find the cholesky decomposition
+of the covariance matrix of this vector, which we also do when we incrementally
+simulate.
+
+\textbf{However:} While it is true that we pay no price in computational complexity,
+the actual implementation can suffer:
+\begin{enumerate}
+    \item We cannot use existing BLAS routines, and manual implementation is slower
+    \item The BLAS routines progress column by column instead of row by row -- most likely
+    because this results in better memory access patterns
+    \item We do not know the final size of the covariance matrix, so we need to be able
+    to add rows incrementally. Since each row also gets longer in every iteration and we
+    do not want to move all of this around in memory this forces a packed memory layout 
+    that is not as suited to existing BLAS routines.
+\end{enumerate}
+
+Consequently, the above leaves room for a lot of manual optimization as one cannot
+rely as much on existing routines.

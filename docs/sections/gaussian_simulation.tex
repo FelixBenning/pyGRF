@@ -1,0 +1,46 @@
+\section{Simulation of Gaussian random variables}
+
+If you want to simulate \(X\sim \normal(0, \Sigma)\) the way to do this
+is to find a matrix \(A\) such that \(A A^\transpose = \Sigma\)
+and then define
+\[
+	X = A Y
+\]
+with \(Y_i\overset{\iid}\sim \normal(0,1)\). This is because
+\[
+	\Cov(X)
+	= \E[XX^\transpose]
+	= A \E[YY^\transpose] A^\transpose
+	= A \identity A^\transpose
+	= \Sigma.
+\]
+Observe that there are multiple options \(A\) such that \(AA^\transpose = \Sigma\)
+unlike the square root for natural numbers!
+
+\begin{enumerate}
+	\item The \textbf{cholesky decomposition} uses a lower triangular matrix \(L\)
+	such that \(LL^\transpose = \Sigma\). Assumption: \(\Sigma\) is symmetric, positive definite
+	\item the \textbf{eigenvalue decomposition} finds an orthonormal matrix \(U\) and 
+	diagonal matrix \(D\) such that \(U D U^\transpose = \Sigma\). Assumption: \(\Sigma\) is symmetric.
+	Consequently,
+	\[
+		A = U \sqrt{D}	
+	\]
+	does the job, where the square root should be viewed as entry-wise. For
+	taking the square root we also need positive definiteness (all eigenvalues greater zero).
+	\item The \textbf{singular value decomposition} makes no assumptions about \(\Sigma\)
+	and finds two orthogonal matrices \(U\) and \(V\) and a diagonal \(D\)
+	such that
+	\(\Sigma = U D V\).
+	If \(\Sigma\) is symmetric, then \(V=U\), however due to numerical inaccuracies
+	this is not necessarily the case. The interesting thing is that for simulation
+	we can just throw away \(V\) and use \(A= U \sqrt{D}\) again.
+\end{enumerate}
+
+If you check the \verb|method| parameter of the
+\href{https://numpy.org/doc/stable/reference/random/generated/numpy.random.Generator.multivariate_normal.html#numpy.random.Generator.multivariate_normal}{numpy implementation of the \texttt{multivariate\_normal} distribution} these three
+options are exactly what numpy implements.
+
+The cholesky is the fastest, but numerically most unstable variant. The SVD is the slowest
+but numerically most stable variant.
+Unfortunately, for incremental simulation we are \textbf{forced} to use the cholesky decomposition!

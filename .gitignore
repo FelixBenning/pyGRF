@@ -163,3 +163,4 @@ cython_debug/
 
 pygrf/gd_simulations.parquet
 gd_simulations.parquet
+gd_overview.pdf
