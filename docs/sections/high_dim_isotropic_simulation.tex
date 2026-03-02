@@ -1,0 +1,187 @@
+\section{High dimensional isotropic Gaussian random function simulation}
+
+If one wants to perform Gradient descent on a high dimensional random
+function, then it is necessary to simulate the gradients together
+with the function values. This is possible, since the covariance
+of the gradient to the function value is
+\[
+	\Cov(\nabla \rf(x), \rf(y)) = \E[\nabla \rf(x) \rf(y)]
+	= \nabla_x \E[\rf(x)\rf(y)] = \nabla_x \C(x,y),
+\]
+where we assumed zero mean \(\E[\rf(x)]=0\) for simplicity.
+And similarly
+\[
+\Cov(\nabla \rf(x), \nabla\rf(y)) = \nabla_x \nabla_y\C(x,y).
+\]
+So the covariance of the derivatives is there derivative
+of the covariance function. This makes simulation
+of gradients possible, however a gradient contains \(\dims\)
+entries if \(x\in \real^\dims\). Each of these is a random variable.
+So the vector \(\nabla \rf(x_1), \dots, \nabla\rf(x_n)\) contains
+\(n\dims\) random variables, its covariance matrix is of size \((n\dims)^2\)
+and its cholesky decomposition costs \(\bigO((n\dims)^3)\). This is
+prohibitively expensive for \(\dims \gg 1\).
+
+For isotropic Gaussian random functions this computational complexity may
+however be reduced to 
+\[
+	\bigO((n \min\{n, \dims\})^3),
+\]
+using the ``Adatped-Span'' from
+\citep{benningGradientSpanAlgorithms2024}. In large dimension the above is of
+course \(\bigO(n^6)\). Here we will give a more detailed explanation.
+
+An ``isotropic'' Gaussian random function (GRF) \(\rf\) has mean and covariance functions
+of the form
+\[
+	\mu(x) = \mu(\tfrac{\norm{x}^2}2)
+	\quad\text{and}\quad \C(x,y) = \kappa(\tfrac{\norm{x}^2}2, \tfrac{\norm{y}^2}2, \scp{x, y})
+\]
+Of course if something is a function of \(\tfrac{\norm{x}^2}2\), it can also be written
+as a function of \(\norm{x}\). However this definition interacts better with
+taking derivatives, which is necessary as outlined above.
+
+A special case are the ``stationary isotropic`` GRF that has mean and covariance
+of the form (for a list of examples see \citep[Ch.~5]{rasmussenGaussianProcessesMachine2006})
+\[
+	\mu(x) = \mu \in \real
+	\quad \text{and} \quad \C(x,y) = C(\tfrac{\norm{x-y}^2}2).
+\]
+In the following we will assume isotropy!
+
+Observe that because an orthonormal basis change does not change the covariance
+we essentially have that the partial derivatives all have the same distribution
+-- well almost: The partial derivatives of \(\rf(x)\) in directions that are
+orthogonal ot \(x\) all have the same distribution. Moreover, if they are
+orthogonal they are uncorrelated and since we are in the Gaussian case thereby
+independent!
+
+In general, if
+\[
+	V_n = \Span\set{x_0, \dots, x_n, \nabla \rf(x_0),\dots, \nabla \rf(x_{n-1})}
+\]
+then \textbf{any orthogonal basis} \(w_{\dim(V_n)}, \dots, w_{\dims-1}\) of the
+orthogonal complement \(V_n^\perp\)  of \(V_n\) has the property that
+\(D_{w_i} \rf(x_n)\) are independent identically distributed!
+
+So how does the covariance look in the first step? Well \(V_0 = \set{x_0}\)
+and taking any orthonormal basis \(w_i\) of \(V_0^\perp\) we have
+\[
+	\Cov\Bigl[\begin{pmatrix}
+		\rf(x_0)
+		\\
+		D_{x_0}\rf(x_0)
+		\\
+		D_{w_1} \rf(x_0)
+		\\
+		\vdots
+		\\
+		D_{w_{\dims-1}}\rf(x_0)
+	\end{pmatrix}
+	\Bigr]
+	= \begin{pmatrix}
+		* & *\\
+		* & *\\
+		& & \sigma^2 \\
+		& & & \ddots
+		\\
+		& & & &\sigma^2 
+	\end{pmatrix},
+\]
+where \(\sigma^2\) is the variance of each \(D_{w_i}\rf(x_0)\). The key to
+understand now is that a basis change of the \(w_i\) does not change this
+matrix. We can thus sort of choose a ``future basis'' of \(V_\dims\) before
+knowing it, because we do not know yet what points \(x_i\) the user will choose.
+
+This is what the \texttt{LazyAdaptedSpan} does. It represents \(V_n\)
+and its future extension. And it also tries to avoid ever
+realizing this basis. By expressing everything in terms of the coordinates of
+\(V_n\) it is thereby possible to avoid a lot of the computational cost.
+This is what the code \verb|x0 = grf.into_adapted_span(x0)| does. It turns a
+numpy vector into a coordinate vector with respect to the Adaptive span of
+the GRF. Note that optimizers such as ADAM have coordinate specific learning
+rates which depends on the standard basis. They can therefore not work
+with the adapted span. In this case the adapted span needs to be realized which
+costs \(\bigO(n^2\dims)\) due to the Gram-Schmidt orthogonalization under the hood.
+In that case the total complexity is
+\[
+\bigO(n^6 + n^2\dims)
+\]
+This should still be reasonable for moderate dimension sizes.
+
+Observe that as \(V_n\) grows with \(n\), the non-diagonal part grows with every
+step. This means that the covariance matrices will essentially look like this:
+\begin{center}
+	\includegraphics*[width=\textwidth]{images/matrix_layout.jpg}
+\end{center}
+Let \(v_0, \dots, v_{\dims-1}\) be an orthonormal basis of \(V_n\) and
+for \(n\) large enough such that \(\dim V_n = \dims\). Then for
+\[
+	\Sigma_{kl} \coloneq \Cov\Bigl[\begin{pmatrix}
+		\rf(x_k)	
+		\\
+		D_{v_0} \rf(x_k)
+		\\
+		\vdots
+		\\
+		D_{v_{\dims-1}} \rf(x_k)
+	\end{pmatrix}, \begin{pmatrix}
+		\rf(x_l)	
+		\\
+		D_{v_0} \rf(x_l)
+		\\
+		\vdots
+		\\
+		D_{v_{\dims-1}} \rf(x_l)
+	\end{pmatrix}
+	\Bigr]
+\]
+we have that the covariance matrix of all the values so far is given by
+\[
+	\begin{bmatrix}
+		\Sigma_{11} & \cdots & \Sigma_{1n}
+		\\
+		\vdots & & \vdots
+		\\
+		\Sigma_{n1} & \cdots & \Sigma_{nn},
+	\end{bmatrix}
+\]
+where each \(\Sigma_{lk}\) is a ``Kite-matrix'' with dense upper left
+corner of size
+\[
+	\dim V_{\max\set{l, k}},
+\]
+and a diagonal in the bottom right, where every entry is the same (a ``scaled identity'').
+
+Considering the first section on the simulation of Gaussian random vectors it is
+therefore vital that we can perform the Cholesky decomposition
+of Block matrices, where each block is a ``Kite-matrix''. And the block matrix
+must be stored in such a way as to make appending rows easy. For the
+covariance matrix we can use symmetry and store
+\[
+	[\Sigma_{11}, (\Sigma_{21}, \Sigma_{22}), (\Sigma_{31}, \dots, \Sigma_{33}), \dots),]
+\]
+for the Cholesky decomposition we can also only store the bottom left corner as
+the upper right is zero anyway.
+\textcolor{red}{
+	However if we want to mix and match the decompositions (SVD, eigh, cholesky) as outlined in the section
+	before, this becomes more delicate. Maybe it is necessary to add another
+	block structure in between, which may contain multiple Kite matrices.
+}
+
+\section{TODO}
+
+\begin{enumerate}
+	\item Add more covariance examples. You can see above why it is necessary to
+	be able to take gradients.
+	\item First add code to profile performance,
+	\item Then try to write better performing (non-python) matrix computations underneath.
+	\item Also testing: It is really difficult to write random simulation code,
+	because the outcome is by definition random. So you cannot state exactly what you
+	expect. But you can plot the random function from the simulation and
+	compare it to previous implementation to see if they pass the smell test.
+	The matrix decompositions are also deterministic and it is sometimes possible
+	to compare them directly to a less sophisticated reference implementation
+	that is simpler to understand but less performant.
+\end{enumerate}
+

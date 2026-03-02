@@ -159,6 +159,9 @@ matrix \(\Sigma\).
     \[
         \Sigma_{2\mid 1} = L_{22}L_{22}^\transpose = \underbrace{\Sigma_{22}}_{\text{unconditial variance}} - \underbrace{L_{21}L_{21}^\transpose}_{\text{explained variance}}.
     \]
+    \item \(Y_i\) is the underlying \(\iid\) randomness. In the conditional simulation
+    we keep the existing \(Y_i\) that we have and add ``new randomness'' (this is
+    how it is called in the code)
 
     \item Observe for the above to work we do not need \(L_{11}\) and \(L_{22}\)
     to be triangular. We only need the upper right corner of \(L\) to be zero.
@@ -167,6 +170,13 @@ matrix \(\Sigma\).
     \textcolor{red}{This is not yet implemented, at the moment I am only using
     cholesky in the code. But this would potentially make the algorithm much
     more stable.}
+
+    \item When does cholesky get unstable? When the explained variance is almost
+    the same as the unconditional variance, then it is likely that the ``residual variance''
+    is numerically negative and we cannot calculate the ``residual standard deviation''
+    \(L_{22}\). This happens when the random variables are highly correlated.
+    So in case of a random function typically, when the evaluation locations are
+    very close to each other.
 \end{enumerate}
 
 \subsection{Incremental simulation IS the cholesky decomposition}
@@ -235,3 +245,11 @@ the actual implementation can suffer:
 
 Consequently, the above leaves room for a lot of manual optimization as one cannot
 rely as much on existing routines.
+
+\textcolor{red}{Observe that if we only add a single random variable \(\rf(x_{n+1})\)
+in every iteration, then we only add a single row to the covariance matrix and
+this corresponds exactly to the cholesky decomposition. But if we add more than
+one random variable at once, then we can use a different factorization algorithm
+than cholesky to calculate \(L_{22}\). In particular, if the user asks for all the points
+they are interested in right from the start, then we can avoid cholesky entirely.
+}
