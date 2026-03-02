@@ -1,0 +1,29 @@
+\section{Simulating Gaussian Random Variables}
+
+To simulate \(Z_{1:n} = (Z_1,\dots,Z_n)^T \sim \normal(0, \Sigma_n)\) one typically
+searches for \(\Lmatrix_n\) such that
+\[
+	\Lmatrix_n \Lmatrix_n^T = \Sigma_n,
+\]
+because for \(Y_{1:n}\sim\normal(0,\identity)\) independent standard normal
+random variables we have
+\[
+	Z_{1:n} = \Lmatrix_n Y_{1:n} \sim \normal(0, \Sigma_n).
+\]
+The algorithm of choice is typically the cholesky decomposition.
+In particular for a centered gaussian process/random field 
+\(Z=(Z(x))_{x\in\real^\dimension}\) with covariance function \(\C\),
+we can simulate \((Z(x_1),\dots, Z(x_n))\) by calculating \(\Sigma_n\) from its
+covariance function
+\[
+	\Sigma_n = \begin{pmatrix}
+		\C(x_1, x_1) &\dots &\C(x_1, x_n)\\
+		\vdots &  & \vdots \\
+		\C(x_n, x_1) &\dots &\C(x_n, x_n)
+	\end{pmatrix}.
+\]
+But what if you already have simulated \((Z(x_1),\dots,Z(x_n))\) and now want
+to obtain \(Z_{n+1} = Z(x_{n+1})\) without changing your previous values? If you wanted
+to do optimization on a random field for example, the position \(X_{n+1}\) might
+even be a random variable depending on the previous results. You can hardly
+start over in this case.

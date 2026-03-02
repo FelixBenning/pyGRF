@@ -1,0 +1,172 @@
+\section{Incremental Cholesky}
+
+Assuming we already have the cholesky decomposition \(\Lmatrix_n\) of \(\Sigma_n\),
+can we find the cholesky decomposition \(\Lmatrix_{n+1}\) of the extended covariance
+matrix \(\Sigma_{n+1}\) faster? It turns out yes, as
+\[
+	\begin{aligned}
+	\Lmatrix_{n+1}\Lmatrix_{n+1}^T
+	&=\begin{pmatrix}
+		\Lmatrix & \\
+		l^T &\lambda
+	\end{pmatrix}
+	\begin{pmatrix}
+		\Lmatrix^T &  l\\
+		&\lambda^T
+	\end{pmatrix}
+	= \begin{pmatrix}
+		\Lmatrix \Lmatrix^T & \Lmatrix l\\
+		l^T \Lmatrix^T & l^T l + \lambda\lambda^T
+	\end{pmatrix}\\
+	\overset!&= \begin{pmatrix}
+		\Sigma_n & c_n \\
+		c_n & \sigma_n^2
+	\end{pmatrix} = \Sigma_{n+1}
+	\end{aligned}
+\]
+implies \(\Lmatrix = \Lmatrix_n\) and
+\[
+	l_n := l = \Lmatrix^{-1}c_n.
+\]
+And finally
+\[
+	\lambda_n := \lambda = \sqrt{\sigma_n^2 - l^T l}.
+\]
+
+If we now apply \(\Lmatrix_{n+1}\) to \(Y_{1:(n+1)}\), we get
+\[
+	Z_{1:(n+1)}
+	= \begin{pmatrix}
+		\Lmatrix_n & \\
+		l_n^T & \lambda_n
+	\end{pmatrix}
+	Y_{1:(n+1)}
+	= \begin{pmatrix}
+		\Lmatrix_n Y_{1:n} \\
+	 	l_n^T Y_{1:n} + \lambda_n Y_{n+1}
+	\end{pmatrix}
+\]
+So if we reuse \(Y_{1:n}\), then we will also get the same \(Z_{1:n}\). Assuming
+\(\Lmatrix_n\) is invertible (\(\Sigma_n\) strictly positive definite), we have
+\[
+	\E[Z_{n+1}\mid Z_{1:n}]
+	= \E[Z_{n+1}\mid Y_{1:n}] = \langle l_n, Y_{1:n}\rangle.
+\]
+So \(\lambda_n\) represents the conditional standard deviation, \(Y_{n+1}\) the
+``new randomness''.
+
+\subsection{Performance}
+
+It turns out, that adding the row \((l_n^T ,\lambda_n)\) to \(\Lmatrix_n\) is exactly
+how the Cholesky-Banachiewicz algorithm for determining the Cholesky
+decomposition is defined. So we are literally doing the exact same calculations.
+The only change is the order of the operations. So the question is how memory
+access friendly the respective algorithms are. The advantage is, that we do not
+have to fetch all the rows from memory once we want to multiply
+\(\Lmatrix_n\) with \(Y_{1:n}\). Instead we can do this multiplication immediately after
+we calculated \(l_n\) and \(\lambda_n\). But we do have to repeatedly retrieve
+\(Y_{1:n}\) on the other hand. So in this sense the effect cancels out.
+
+To store the \(Y_{1:n}\) we simply use a dynamic array. To save the matrix \(\Lmatrix_n\)
+we do not want to use a normal \(2\) dimensional array. Because, to extend a
+matrix by one row and column, you would have to extend the rows by one, which
+are stored one after the other in a row major format which essentially
+requires moving all of them (analogously columns in column major).
+
+So instead we want to use packed storage
+\[
+	\begin{bmatrix}
+		l_{00}	
+	\end{bmatrix}
+	\begin{bmatrix}
+		l_{10} & l_{11}
+	\end{bmatrix}
+	\begin{bmatrix}
+		l_{20} & l_{21} & l_{22}
+	\end{bmatrix}
+	\dots
+\]
+As we only need to append \((l_n^T, \lambda_n)\), we can again use a dynamic
+array. Another benefit of packed storage is, that it saves half the space a
+full matrix requires. Unfortunately packed storage only allows vectorized BLAS routines
+(BLAS-2) but not block-wise operations (BLAS-3). And similarly the most performant
+cholesky decompositions want to access the data block-wise. So adding just one
+row \(l_n^T\) is not as performant as adding a block. To fix the first problem
+we propose ``Block Packed Storage'', which we will describe in Section~\ref{sec: memory
+layout}.
+
+\subsection{Numerical Stability}
+
+Numerical errors might cause \(\sigma^2 - l^T l\) to be negative which
+represents a negative conditional variance. In other words: the existing points
+explain the new point so well (\(l^Tl\) is large), such that almost no
+randomness is left and numerical errors make the randomness negative. This
+happens especially for very smooth random fields where adjacent points are
+excellent predictors. The pivoted Cholesky decomposition reorders the points
+such that the conditional variance is as high as possible (i.e. usually continue
+with the point farthest away) and at the end fill-in the remaining points
+truncating the variance to zero if necessary.
+
+\subsubsection{Truncation}
+
+Unfortunately we can not reorder the points in the incremental case. And if the
+points are for example an ordered discretization of the interval \([0,1]\) and
+the variance becomes numerically zero once we know the previous \(3\) points,
+then after the first three points we will always truncate the variance to zero
+and use the conditional expectation for the next point. This removes all the
+randomness from then on, and the resulting simulation is anything but the desired
+random field.
+\fxnote{
+	truncation would actually make \(\Lmatrix_n\) non-invertible. So we can
+	not actually continue. What is really the usual method in pivoted Cholesky??
+}
+
+\subsubsection{Skipping}
+
+A slightly less naïve idea would be to pretend like an evaluation never happened
+whenever the variance becomes numerically zero. We still return the conditional
+expectation but do not remember the resulting point so it has no effect on later
+points. For a better intuition let us pretend that if we skip the 4th and 5th point
+in the previous example, the 6th one is random enough again for the conditional
+variance to be numerically non-zero. Plotting the conditional expectation of
+point \(4\) and \(5\) results in a very smooth curve which suddenly jumps
+to the truly random point \(6\), causing a visible fault-line to appear. If one
+had first sampled point \(6\) and then calculated the conditional expectation
+of \(4\) and \(5\), they would have taken point \(6\) into account and would
+have curved towards it. But as we did not take it into account, the resulting
+simulation has these discontinuities.
+
+\subsubsection{Jitter}
+
+The visually least intrusive measure seems to be adding iid normal distributed
+noise (jitter) to every point. Computationally this adds the diagonal \(\epsilon^2
+\identity\) to the covariance matrix. The calculation of \(\lambda_n\) then
+looks like
+\[
+	\lambda_n = \sqrt{\sigma_n^2 + \epsilon^2 - l_n^T l_n}.
+\]
+The interpretation is, that we actually evaluate the random field
+\[
+	\tilde{Z}(x) = Z(x) + \epsilon Y_x,
+\]
+where \(Y_x\overset{iid}\sim\normal(0,1)\). We can then interpret \(\tilde{Z}\)
+as an estimator for \(Z\). The confidence interval of the estimation is
+proportional to \(\epsilon\) everywhere. ``Everywhere'' is the keyword here, we
+therefore know that errors do not build up in contrast to the first method
+proposed.
+
+Another nice property of this method is, that it visibly fails whenever we zoom
+in too far (ask questions which require more precision than we have). Because
+you can see the jitter caused by the iid noise in that case. Zoom out far enough
+and the curve looks smooth on the other hand.
+
+\subsubsection{Our Solution}
+
+The constructor of \mintinline{julia}{GaussianRandomField} accepts an optional 
+\mintinline{julia}{jitter} parameter defining \(\epsilon\). Whenever it is too
+small and negative conditional variance occurs, we fall back to the ``skipping''
+approach but throw a warning. For a pure ``jitter'' simulation you can treat these
+warnings as errors and increase jitter. For a pure ``skipping'' simulation
+simply set \mintinline{julia}{jitter} to zero.
+
+\fxnote{add plots}

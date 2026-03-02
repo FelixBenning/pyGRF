@@ -1,0 +1,122 @@
+\section{Conditional Gaussian distributions}
+\label{sec: conditional gaussian distribution}
+
+Theorem~\ref{thm: conditional gaussian distribution} about conditional Gaussian
+distributions is well known
+\citep[e.g.][Prop.~3.13.]{eatonMultivariateStatisticsVector2007}, but for your
+convenience we wrote down our favorite proof of this theorem capturing
+the intuition behind the statement.
+
+\begin{theorem}[Conditional Gaussian distribution]
+    \label{thm: conditional gaussian distribution}
+    Let \(X\sim\normal(\mu,\Sigma)\) be a multivariate Gaussian vector where
+    the covariance matrix is a block matrix of the form
+    \[
+        \mu = \begin{bmatrix}
+            \mu_1\\ \mu_2
+        \end{bmatrix}
+        \quad \text{and} \quad
+        \Sigma = \begin{bmatrix}
+            \Sigma_{11} & \Sigma_{12}
+            \\
+            \Sigma_{21} & \Sigma_{22}
+        \end{bmatrix},
+    \]
+    then the conditional distribution of \(X_2\) given \(X_1\) is
+    \[
+        X_2\mid X_1 \sim \normal(\mu_{2\mid 1}, \Sigma_{2\mid 1}),
+    \]
+    with conditional mean and variance
+    \begin{align*}
+        \mu_{2\mid 1} &:= \mu_2 + \Sigma_{21}\Sigma_{11}^{-1}(X_1-\mu_1)
+        \\
+        \Sigma_{2\mid 1} &:= \Sigma_{22} -  \Sigma_{21}\Sigma_{11}^{-1}\Sigma_{12}.
+    \end{align*}
+    where \(\Sigma_{11}^{-1}\) may be a generalized inverse
+    \citep[cf.][]{eatonMultivariateStatisticsVector2007}.
+\end{theorem}
+\begin{proof}
+    For the general statement we point to the standard literature
+    \citep[e.g.][]{eatonMultivariateStatisticsVector2007}.
+    For this proof we will assume for simplicity that \(\Sigma\) is invertible.
+
+    Let \(\bar{X} := X-\mu\) be the centered version of \(X\). Then there exists
+    a unique lower triangular matrix \(L\) such that \(\Sigma = LL^T\) (i.e.\ the Cholesky
+    Decomposition). This results in the following representation\footnote{
+        It is straightforward to check that \(Y := L^{-1}(X-\mu)\)
+        is a multivariate Gaussian vector of centered, uncorrelated entries with variance \(1\).
+        They are therefore \(\iid\) standard normal since uncorrelated multivariate Gaussian
+        random variables are independent. Sometimes this representation is even
+        taken as the definition of a multivariate normal distribution.
+        This is the only real place we use the invertibility of \(\Sigma\) in
+        its entirety, the invertibility of \(\Sigma_{11}^{-1}\) is used later on
+        because we do not want to get into the business of generalized inverses
+        here.
+    }
+    \[
+        X - \mu =:
+        \begin{bmatrix}
+            \bar{X}_1
+            \\
+            \bar{X}_2
+        \end{bmatrix}
+        = \begin{bmatrix}
+            L_{11} & 0
+            \\
+            L_{21} & L_{22}
+        \end{bmatrix}
+        \begin{bmatrix}
+            Y_1 \\ Y_2
+        \end{bmatrix}
+        = LY
+    \]
+    with independent standard normal \(Y_i\), i.e. \(Y\sim\normal(0, \identity)\).
+    \(L_{11}\) is invertible since \(\Sigma_{11}\) and therefore the map from
+    \(Y_1\) to \(X_1\) is bijective. Conditioning on \(X_1\) is therefore
+    equivalent to conditioning on \(Y_1\). But we have
+    \begin{equation}
+        \label{eq: underlying explicit decomposition}
+        X_2 = \mu_2 + \bar{X}_2
+        = \underbrace{\mu_2 + L_{21}Y_1}_{\text{conditional expectation}} + \underbrace{L_{22} Y_2}_{\text{conditional distribution}}
+    \end{equation}
+    So it follows that
+    \[
+        X_2\mid X_1 \sim  \normal(\mu_{2\mid 1}, \Sigma_{2\mid 1})
+    \]
+    with
+    \begin{align*}
+        \mu_{2\mid 1} &:= \E[X_2 \mid X_1]
+        &=& \mu_2 + L_{21}Y_1
+        \\
+        \Sigma_{2\mid 1} &:= \Cov[X_2 \mid X_1] = \E\Bigl[ \bigl(X_2 - \E[X_2 \mid X_1]\bigr)^2 \mid X_1\Bigr]
+        &=& L_{22}L_{22}^T.
+    \end{align*}
+    What is left to do, is to find a representation for the \(L_{ij}\)
+    using the block matrices of \(\Sigma\). For this we observe
+    \begin{equation}
+        \label{eq: sigma to L conversion}
+        \setlength\arraycolsep{4pt}
+        \begin{bmatrix}
+            \Sigma_{11} & \Sigma_{12}\\
+            \Sigma_{21} & \Sigma_{22}
+        \end{bmatrix}
+        = \Sigma
+        = LL^T = \begin{bmatrix}
+            L_{11}L_{11}^T & L_{11}L_{21}^T
+            \\
+            L_{21}L_{11}^T & L_{22}L_{22}^T + L_{21}L_{21}^T
+        \end{bmatrix}.
+    \end{equation}
+    Using \(Y_1 = L_{11}^{-1}\bar{X}_1\) and the insertion of an identity matrix this implies
+    \[
+        L_{21}Y_1 = L_{21}(L_{11}^T L_{11}^{-T})(L_{11}^{-1}\bar{X}_1)
+        \overset{\eqref{eq: sigma to L conversion}}= \Sigma_{21}\Sigma_{11}^{-1}(X_1-\mu_1).
+    \]
+    resulting in the desired conditional expectation \(\mu_{2\mid 1}\). The conditional variance follows alike
+    \begin{align*}
+        \Sigma_{2\mid 1} = L_{22}L_{22}^T
+        \overset{\eqref{eq: sigma to L conversion}}&= \Sigma_{22} - L_{21}L_{21}^T
+        \\
+        &= \Sigma_{22} - \underbrace{L_{21}(L_{11}^T}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{21}}\underbrace{L_{11}^{-T}) (L_{11}^{-1}}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{11}^{-1}}\underbrace{L_{11})L_{21}^T}_{\overset{\eqref{eq: sigma to L conversion}}=\Sigma_{12}}.
+    \end{align*}
+\end{proof}

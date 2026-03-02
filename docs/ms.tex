@@ -1,0 +1,43 @@
+\documentclass[a4paper]{article}
+
+\input{packages.tex}
+
+%%% EDITING (Annotations, TODO, etc.) 
+\usepackage[draft]{fixme} %final removes annotations %draft includes annotations
+\fxsetup{theme=color}
+%%\fxnote{some note} ,\fxwarning{}, \fxerror{}, \fxfatal{} <- does not allow [final] to compile
+
+%%% BIBLIOGRAPHY
+\usepackage[authoryear]{natbib}
+\bibliographystyle{abbrvnat}
+
+\input{macros.tex}
+
+
+\title{Incremental Gaussian Process}
+\author{Felix Benning}
+
+\begin{document}
+	\maketitle 
+	\input{sections/abstract.tex}
+
+
+	\input{sections/conditional_gaussian.tex}
+
+	\bibliography{references}
+	\newpage
+	\appendix
+	
+	\part{Old explanation of previous Julia code}
+	\paragraph*{
+		This was a draft for an
+		explanation of a previous implementation that did not
+		use the isotropy tricks yet. Much of it is outdated.
+	}
+
+	\input{sections/simulate_gaussian.tex}
+	\input{sections/incremental_cholesky.tex}
+	\input{sections/memory_layout.tex}
+	\input{sections/parallelization.tex}
+
+\end{document}
