@@ -8,9 +8,9 @@ set of evaluation points \(x_1, \dots, x_n\) we have that
 \]
 is a multivariate Gaussian random vector with mean
 \[
-    \mu(x_1), \dots, \mu(x_n)
+    \mu(x_1), \dots, \mu(x_n) = (\E[\rf(x_1)], \dots, \E[\rf(x_n)])
 \]
-and covariance
+and covariance \(\C(x_i, x_j) = \Cov(\rf(x_i), \rf(x_j))\) that is
 \[
     \Sigma = \begin{pmatrix}
         \C(x_1, x_1) & \cdots & \C(x_1, x_n)
